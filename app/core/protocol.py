@@ -1,3 +1,5 @@
+# corez\protocol.py
+
 import struct
 import socket
 
