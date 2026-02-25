@@ -3,7 +3,7 @@
 import socket
 import struct
 
-from core.frame_builder import FrameBuilder
+from app.core.frame_builder import FrameBuilder
 
 
 class CommboxClient:
@@ -23,9 +23,20 @@ class CommboxClient:
                 s.connect((self.ip, self.port))
                 s.sendall(frame)
 
-                response = s.recv(4096)
+                full_response = b''
 
-                return self._parse_response(response)
+                while True:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+
+                    full_response += chunk
+
+                    # se já temos pelo menos header completo
+                    if len(full_response) >= 32:
+                        break
+
+                return self._parse_response(full_response)
 
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -35,13 +46,43 @@ class CommboxClient:
         if not data:
             return {"status": "timeout"}
 
-        # Opcode resposta está na posição 28-32
-        response_opcode = struct.unpack(">I", data[28:32])[0]
+        data_size = struct.unpack(">I", data[8:12])[0]
+        opcode = struct.unpack(">I", data[28:32])[0]
+        payload = data[32:32 + data_size]
 
-        if response_opcode & 0x80000000:
-            return {"status": "ack", "opcode": response_opcode}
+        # Se tem payload
+        if data_size > 0:
 
-        if response_opcode & 0x40000000:
-            return {"status": "nack", "opcode": response_opcode}
+            clean_opcode = opcode & 0x7FFFFFFF
+
+            # Caso 4 bytes (Opcode 02 ou 06)
+            if data_size == 4:
+                value = struct.unpack(">I", payload)[0]
+
+                return {
+                    "status": "data",
+                    "opcode": clean_opcode,
+                    "value": value
+                }
+
+            # Caso 8 bytes (Opcode 03)
+            if data_size == 8:
+                input_mask = struct.unpack(">I", payload[0:4])[0]
+                output_mask = struct.unpack(">I", payload[4:8])[0]
+
+                return {
+                    "status": "data_combined",
+                    "opcode": clean_opcode,
+                    "inputs": input_mask,
+                    "outputs": output_mask
+                }
+
+        # ACK puro
+        if opcode & 0x80000000:
+            return {"status": "ack", "opcode": opcode}
+
+        # NACK
+        if opcode & 0x40000000:
+            return {"status": "nack", "opcode": opcode}
 
         return {"status": "unknown", "raw": data.hex()}

@@ -1,35 +1,47 @@
-# app/api/routes_outputs.py
+# app/api/routes_inputs.py
 
 from fastapi import APIRouter, HTTPException
 from app.core.commbox_client import CommboxClient
-from app.core.opcodes.output import build_output_command
-from app.models.schema import CommandRequest
+from app.services.state_instance import state_manager
 
 router = APIRouter()
-
 client = CommboxClient(ip="192.168.26.228", port=5000)
 
 
-@router.post("/control/output")
-def control_output(cmd: CommandRequest):
+@router.get("/inputs/status")
+def read_inputs():
 
-    try:
-        app_data = build_output_command(
-            component_addr=cmd.component_addr,
-            action=cmd.action,
-            total_time=cmd.total_time,
-            memory=cmd.memory
-        )
+    response = client.send(opcode=6, application_data=b'')
 
-        response = client.send(opcode=1, application_data=app_data)
+    if response["status"] == "data":
 
-        if response["status"] == "ack":
-            return {"status": "success", "device_response": response}
+        mask = response["value"]
 
-        if response["status"] == "nack":
-            raise HTTPException(status_code=400, detail=response)
+        inputs = {
+            i + 1: bool(mask & (1 << i))
+            for i in range(32)
+        }
 
-        raise HTTPException(status_code=500, detail=response)
+        return {
+            "raw_mask": mask,
+            "inputs": inputs
+        }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=400, detail=response)
+
+@router.get("/io/status")
+def read_io_combined():
+
+    response = client.send(opcode=3, application_data=b'')
+
+    if response["status"] == "data_combined":
+
+        input_mask = response["inputs"]
+        output_mask = response["outputs"]
+
+        state_manager.update_both(input_mask, output_mask)
+
+        return state_manager.get_full_state()
+
+    raise HTTPException(status_code=400, detail=response)
+    
