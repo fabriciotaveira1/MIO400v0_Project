@@ -1,7 +1,8 @@
 # api\routes.py
 import asyncio
 from fastapi import APIRouter, HTTPException
-from app.core.protocol import MIO400Controller
+from app.core.commbox_client import CommboxClient
+from app.core.opcodes.output import build_output_command
 from app.models.schema import CommandRequest
 
 router = APIRouter()
