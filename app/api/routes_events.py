@@ -37,8 +37,8 @@ def configure_host():
 def configure_inputs():
 
     try:
-        for i in range(1, 33):  # 32 entradas
-
+        valid_inputs = []
+        for i in range(1, 33):
             app_data = build_input_configuration(
                 address=i,
                 host_report_mode=0b00000111,
@@ -47,10 +47,15 @@ def configure_inputs():
 
             response = client.send(opcode=4, application_data=app_data)
 
-            if response["status"] != "ack":
-                return {"error_on_input": i, "response": response}
+            if response["status"] == "ack":
+                valid_inputs.append(i)
+            else:
+                break
 
-        return {"status": "Todos inputs configurados para reportar eventos"}
+        return {
+            "status": "Configuração concluída",
+            "max_inputs_detected": len(valid_inputs)
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

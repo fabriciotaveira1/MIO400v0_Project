@@ -76,6 +76,17 @@ class CommboxClient:
                     "inputs": input_mask,
                     "outputs": output_mask
                 }
+            
+            if opcode & 0x40000000:
+                error_code = struct.unpack(">I", payload[0:4])[0]
+                error_data = struct.unpack(">I", payload[4:8])[0]
+
+                return {
+                    "status": "nack",
+                    "opcode": opcode,
+                    "error_code": error_code,
+                    "error_data": error_data
+                }
 
         # ACK puro
         if opcode & 0x80000000:

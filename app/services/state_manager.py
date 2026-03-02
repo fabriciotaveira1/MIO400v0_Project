@@ -13,6 +13,7 @@ class StateManager:
         self._inputs_mask = 0
         self._outputs_mask = 0
         self._last_update = None
+        self.last_heartbeat = time.time()
 
     # =========================
     # UPDATE METHODS
@@ -33,6 +34,9 @@ class StateManager:
             self._inputs_mask = input_mask
             self._outputs_mask = output_mask
             self._last_update = time.time()
+
+    def is_online(self, timeout=10):
+        return (time.time() - self.last_heartbeat) < timeout
 
     # =========================
     # GET METHODS
