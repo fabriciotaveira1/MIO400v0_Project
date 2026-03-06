@@ -1,3 +1,5 @@
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -11,3 +13,12 @@ class CommandRequest(BaseModel):
 class DeviceConfig(BaseModel):
     device_ip: str
     device_port: int = 5000
+
+
+class RulePayload(BaseModel):
+    id: Optional[int] = None
+    name: str
+    trigger: Dict[str, Any] = Field(default_factory=dict)
+    conditions: List[Dict[str, Any]] = Field(default_factory=list)
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    enabled: bool = True

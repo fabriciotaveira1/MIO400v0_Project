@@ -2,26 +2,28 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from app.automation.rule_manager import rule_manager
+from app.automation.storage import io_names_storage
+from app.models.schema import RulePayload
+from app.services.rule_engine import rule_engine
 
 router = APIRouter()
 
 
 @router.get("/automation/rules")
 def list_automation_rules():
-    return {"rules": rule_manager.list_rules()}
+    return {"rules": rule_engine.list_rules()}
 
 
 @router.post("/automation/rules")
-def create_automation_rule(rule: Dict[str, Any]):
-    created = rule_manager.create_rule(rule)
+def create_automation_rule(rule: RulePayload):
+    created = rule_engine.create_rule(rule.model_dump(exclude_none=True))
     return {"rule": created}
 
 
 @router.put("/automation/rules/{rule_id}")
-def update_automation_rule(rule_id: int, rule: Dict[str, Any]):
+def update_automation_rule(rule_id: int, rule: RulePayload):
     try:
-        updated = rule_manager.update_rule(rule_id, rule)
+        updated = rule_engine.update_rule(rule_id, rule.model_dump(exclude_none=True))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"rule": updated}
@@ -30,7 +32,7 @@ def update_automation_rule(rule_id: int, rule: Dict[str, Any]):
 @router.delete("/automation/rules/{rule_id}")
 def delete_automation_rule(rule_id: int):
     try:
-        rule_manager.delete_rule(rule_id)
+        rule_engine.delete_rule(rule_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"status": "deleted"}
@@ -39,7 +41,7 @@ def delete_automation_rule(rule_id: int):
 @router.put("/automation/rules/{rule_id}/enable")
 def enable_automation_rule(rule_id: int):
     try:
-        updated = rule_manager.set_rule_enabled(rule_id, True)
+        updated = rule_engine.set_rule_enabled(rule_id, True)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"rule": updated}
@@ -48,7 +50,7 @@ def enable_automation_rule(rule_id: int):
 @router.put("/automation/rules/{rule_id}/disable")
 def disable_automation_rule(rule_id: int):
     try:
-        updated = rule_manager.set_rule_enabled(rule_id, False)
+        updated = rule_engine.set_rule_enabled(rule_id, False)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"rule": updated}
@@ -56,9 +58,23 @@ def disable_automation_rule(rule_id: int):
 
 @router.get("/io/names")
 def get_io_names():
-    return rule_manager.get_io_names()
+    data = io_names_storage.read()
+    return {
+        "inputs": dict(data.get("inputs", {})),
+        "outputs": dict(data.get("outputs", {})),
+    }
 
 
 @router.post("/io/names")
 def set_io_names(payload: Dict[str, Any]):
-    return rule_manager.set_io_names(payload)
+    current = io_names_storage.read()
+    current["inputs"] = dict(current.get("inputs", {}))
+    current["outputs"] = dict(current.get("outputs", {}))
+    current["inputs"].update(
+        {str(k): str(v) for k, v in dict(payload.get("inputs", {})).items()}
+    )
+    current["outputs"].update(
+        {str(k): str(v) for k, v in dict(payload.get("outputs", {})).items()}
+    )
+    io_names_storage.write(current)
+    return current

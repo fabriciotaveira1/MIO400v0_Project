@@ -5,7 +5,7 @@ import struct
 import time
 import threading
 
-from app.automation.automation_engine import automation_engine
+from app.services.rule_engine import rule_engine
 from app.services.state_instance import state_manager
 
 
@@ -109,8 +109,15 @@ class SocketListener:
 
                 print(f"[EVENT] Input {input_address} changed")
 
+                previous_state = bool(
+                    state_manager.get_inputs_mask() & (1 << (input_address - 1))
+                )
                 state_manager.update_both(inputs_mask, outputs_mask)
                 input_state = bool(inputs_mask & (1 << (input_address - 1)))
-                automation_engine.process_input_event(input_address, input_state)
+                rule_engine.process_input_event(
+                    input_id=input_address,
+                    current_state=input_state,
+                    previous_state=previous_state,
+                )
 
                 print("[STATE UPDATED]")

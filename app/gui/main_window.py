@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
             output_count=self.output_count,
             io_names=self.io_names,
         )
-        tabs.addTab(self.automation_tab, "Automacao")
+        tabs.addTab(self.automation_tab, "AUTOMAÇÃO")
         self.setCentralWidget(tabs)
 
     def _build_io_tab(self) -> QWidget:

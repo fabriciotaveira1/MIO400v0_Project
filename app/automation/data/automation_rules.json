@@ -1,38 +1,33 @@
 {
   "rules": [
     {
-      "id": 2,
-      "name": "Regra 01",
+      "id": 5,
+      "name": "Regra sem nome",
       "trigger": {
-        "type": "event",
-        "input": 1,
-        "state": true
+        "type": "INPUT_ON",
+        "input": 1
       },
       "conditions": [],
       "actions": [
         {
-          "type": "timer",
-          "mode": "pulse",
-          "output": 1,
-          "duration_ms": 5000
+          "type": "OUTPUT_OFF",
+          "output": 1
         }
       ],
       "enabled": true
     },
     {
-      "id": 3,
-      "name": "Desligar",
+      "id": 6,
+      "name": "Regra sem nome",
       "trigger": {
-        "type": "event",
-        "input": 2,
-        "state": true
+        "type": "INPUT_ON",
+        "input": 1
       },
       "conditions": [],
       "actions": [
         {
-          "type": "output",
-          "output": 1,
-          "action": "off"
+          "type": "OUTPUT_ON",
+          "output": 1
         }
       ],
       "enabled": true
