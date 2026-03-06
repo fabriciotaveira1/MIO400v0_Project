@@ -19,13 +19,15 @@ app.include_router(inputs_router)
 app.include_router(events_router)
 app.include_router(health_router)
 
-# Inicia listener automaticamente
-listener = SocketListener(port=4090)
-listener.start()
+@app.on_event("startup")
+def startup_services():
+    listener = SocketListener(port=4090)
+    listener.start()
+    app.state.listener = listener
 
-#inicia monitoramento automaticamente
-monitor = DeviceMonitor()
-monitor.start()
+    monitor = DeviceMonitor()
+    monitor.start()
+    app.state.monitor = monitor
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

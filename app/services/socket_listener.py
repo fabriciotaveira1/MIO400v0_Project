@@ -16,13 +16,27 @@ class SocketListener:
         self._running = False
 
     def start(self):
+        if self._running:
+            return
         self._running = True
         thread = threading.Thread(target=self._run, daemon=True)
         thread.start()
 
     def _run(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.bind((self.host, self.port))
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                server.bind((self.host, self.port))
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 10048:
+                    print(
+                        f"[SocketListener] Porta {self.port} em uso. "
+                        "Listener nao sera iniciado neste processo."
+                    )
+                    self._running = False
+                    return
+                raise
+
             server.listen(5)
 
             print(f"[SocketListener] Listening on {self.port}")
@@ -56,6 +70,25 @@ class SocketListener:
 
         # Remove bit 31
         clean_opcode = opcode & 0x7FFFFFFF
+
+        # Heartbeat (Opcode 92)
+        if clean_opcode == 92:
+            state_manager.last_heartbeat = time.time()
+
+            # Payload com data_code 04 + inputs/outputs
+            # Suporte para data_code em 1 byte (offset 32) ou 4 bytes (offset 32-36).
+            if len(data) >= 41 and data[32] == 4:
+                inputs_mask = struct.unpack(">I", data[33:37])[0]
+                outputs_mask = struct.unpack(">I", data[37:41])[0]
+                state_manager.update_both(inputs_mask, outputs_mask)
+            elif len(data) >= 44:
+                data_code = struct.unpack(">I", data[32:36])[0]
+                if data_code == 4:
+                    inputs_mask = struct.unpack(">I", data[36:40])[0]
+                    outputs_mask = struct.unpack(">I", data[40:44])[0]
+                    state_manager.update_both(inputs_mask, outputs_mask)
+
+            return
 
         # Evento (Opcode 30)
         if clean_opcode == 30:

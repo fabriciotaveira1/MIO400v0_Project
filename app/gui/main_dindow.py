@@ -1,1 +1,5 @@
-# /gui/main_window.py
+from app.gui.main_window import main
+
+
+if __name__ == "__main__":
+    main()
