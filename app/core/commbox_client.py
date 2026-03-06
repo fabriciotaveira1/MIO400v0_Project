@@ -62,7 +62,8 @@ class CommboxClient:
                 return {
                     "status": "data",
                     "opcode": clean_opcode,
-                    "value": value
+                    "value": value,
+                    "payload": payload
                 }
 
             # Caso 8 bytes (Opcode 03)
@@ -74,7 +75,8 @@ class CommboxClient:
                     "status": "data_combined",
                     "opcode": clean_opcode,
                     "inputs": input_mask,
-                    "outputs": output_mask
+                    "outputs": output_mask,
+                    "payload": payload
                 }
             
             if opcode & 0x40000000:
@@ -87,6 +89,12 @@ class CommboxClient:
                     "error_code": error_code,
                     "error_data": error_data
                 }
+
+            return {
+                "status": "data_raw",
+                "opcode": clean_opcode,
+                "payload": payload
+            }
 
         # ACK puro
         if opcode & 0x80000000:

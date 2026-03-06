@@ -110,27 +110,29 @@ class ConnectionWindow(QWidget):
                 },
                 timeout=2.0,
             )
+            device_info = _http_json("GET", f"{api_base_url}/device/capabilities", timeout=4.0)
             _http_json("GET", f"{api_base_url}/device/health", timeout=2.0)
         except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError):
             QMessageBox.critical(self, "Erro", "Nao foi possivel conectar ao dispositivo")
             return
 
-        self.main_window = MainWindow(api_base_url=api_base_url)
+        self.main_window = MainWindow(api_base_url=api_base_url, device_info=device_info)
         self.main_window.show()
         self.hide()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, api_base_url: str):
+    def __init__(self, api_base_url: str, device_info: Dict[str, Any]):
         super().__init__()
         self.api_base_url = api_base_url.rstrip("/")
+        self.device_info = device_info or {}
         self.setWindowTitle("MIO400 - Painel de I/O")
         self.resize(1100, 720)
 
         self.input_labels: Dict[int, QLabel] = {}
         self.output_labels: Dict[int, QLabel] = {}
-        self.input_count = 0
-        self.output_count = 0
+        self.input_count = self._safe_int(self.device_info.get("inputs"), 0)
+        self.output_count = self._safe_int(self.device_info.get("outputs"), 0)
         self._is_refreshing = False
 
         self._build_ui()
@@ -153,20 +155,42 @@ class MainWindow(QMainWindow):
         health_layout.addWidget(self.health_indicator)
         health_layout.addStretch()
 
+        device_layout = QHBoxLayout()
+        self.device_label = QLabel(
+            "Controladora: "
+            f"{self.device_info.get('model', 'MIO')}  |  "
+            f"Entradas: {self.input_count}  |  "
+            f"Saidas: {self.output_count}  |  "
+            f"Firmware: {self.device_info.get('firmware', 'unknown')}"
+        )
+        self.device_label.setStyleSheet("font-weight: 600;")
+        device_layout.addWidget(self.device_label)
+        device_layout.addStretch()
+
         io_layout = QHBoxLayout()
         io_layout.setSpacing(16)
         self.inputs_panel = QWidget()
         self.outputs_panel = QWidget()
         io_layout.addWidget(self.inputs_panel)
         io_layout.addWidget(self.outputs_panel)
+        self._set_panel_widget(
+            self.inputs_panel,
+            self._build_states_panel("Inputs", self.input_count, self.input_labels),
+        )
+        self._set_panel_widget(
+            self.outputs_panel,
+            self._build_states_panel("Outputs", self.output_count, self.output_labels),
+        )
 
         control_title = QLabel("Controle de Reles")
         control_title.setStyleSheet("font-size: 16px; font-weight: 700;")
         self.control_scroll = QScrollArea()
         self.control_scroll.setWidgetResizable(True)
         self.control_scroll.setMinimumHeight(280)
+        self.control_scroll.setWidget(self._build_controls_panel(self.output_count))
 
         root_layout.addLayout(health_layout)
+        root_layout.addLayout(device_layout)
         root_layout.addLayout(io_layout)
         root_layout.addWidget(control_title)
         root_layout.addWidget(self.control_scroll)
@@ -185,12 +209,13 @@ class MainWindow(QMainWindow):
 
         self._is_refreshing = True
         try:
-            io = _http_json("GET", f"{self.api_base_url}/io/status")
             health = _http_json("GET", f"{self.api_base_url}/device/health")
-
-            self._refresh_dynamic_structure(io)
-            self._apply_io_state(io)
             self._apply_health_state(health)
+            if not bool(health.get("online", False)):
+                return
+
+            io = _http_json("GET", f"{self.api_base_url}/io/status")
+            self._apply_io_state(io)
         except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError):
             self._apply_health_state({"online": False})
         finally:
@@ -208,29 +233,6 @@ class MainWindow(QMainWindow):
             self.refresh_data()
         except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
             QMessageBox.warning(self, "Falha no comando", f"Nao foi possivel enviar comando:\n{exc}")
-
-    def _refresh_dynamic_structure(self, io_data: Dict[str, Any]) -> None:
-        inputs = io_data.get("inputs", {})
-        outputs = io_data.get("outputs", {})
-        new_input_count = self._max_channel(inputs)
-        new_output_count = self._max_channel(outputs)
-
-        if new_input_count != self.input_count:
-            self.input_count = new_input_count
-            self.input_labels = {}
-            self._set_panel_widget(self.inputs_panel, self._build_states_panel("Inputs", self.input_count, self.input_labels))
-
-        if new_output_count != self.output_count:
-            self.output_count = new_output_count
-            self.output_labels = {}
-            self._set_panel_widget(
-                self.outputs_panel,
-                self._build_states_panel("Outputs", self.output_count, self.output_labels),
-            )
-            self.control_scroll.setWidget(self._build_controls_panel(self.output_count))
-
-        if self.control_scroll.widget() is None:
-            self.control_scroll.setWidget(self._build_controls_panel(self.output_count))
 
     def _apply_io_state(self, io_data: Dict[str, Any]) -> None:
         inputs = io_data.get("inputs", {})
@@ -320,21 +322,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(widget)
 
     @staticmethod
-    def _max_channel(channels: Any) -> int:
-        if not isinstance(channels, dict):
-            return 0
-
-        max_channel = 0
-        for key in channels.keys():
-            try:
-                channel = int(key)
-            except (TypeError, ValueError):
-                continue
-            if channel > max_channel:
-                max_channel = channel
-        return max_channel
-
-    @staticmethod
     def _to_bool(value: Any) -> bool:
         if isinstance(value, bool):
             return value
@@ -355,6 +342,14 @@ class MainWindow(QMainWindow):
         palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
         label.setAutoFillBackground(True)
         label.setPalette(palette)
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 0) -> int:
+        try:
+            parsed = int(value)
+            return parsed if parsed >= 0 else default
+        except (TypeError, ValueError):
+            return default
 
 
 def _parse_api_url(api_url: str) -> tuple[str, int]:
