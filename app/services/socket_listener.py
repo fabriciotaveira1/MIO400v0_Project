@@ -2,6 +2,7 @@
 
 import socket
 import struct
+import time
 import threading
 
 from app.services.state_instance import state_manager
@@ -77,17 +78,3 @@ class SocketListener:
                 state_manager.update_both(inputs_mask, outputs_mask)
 
                 print("[STATE UPDATED]")
-        # Heartbeat TCP (Opcode 92)
-        elif clean_opcode == 92:
-
-            data_code = struct.unpack(">I", data[32:36])[0]
-
-            if data_code == 4:
-                inputs_mask = struct.unpack(">I", data[36:40])[0]
-                outputs_mask = struct.unpack(">I", data[40:44])[0]
-
-                print("[HEARTBEAT] Inputs/Outputs received")
-
-                state_manager.update_both(inputs_mask, outputs_mask)
-
-                print("[STATE UPDATED VIA HEARTBEAT]")
