@@ -1,3 +1,5 @@
+# app/api/routes_inputs.py
+
 from fastapi import APIRouter, HTTPException
 
 from app.services.device_manager import device_manager

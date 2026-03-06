@@ -1,0 +1,41 @@
+{
+  "rules": [
+    {
+      "id": 2,
+      "name": "Regra 01",
+      "trigger": {
+        "type": "event",
+        "input": 1,
+        "state": true
+      },
+      "conditions": [],
+      "actions": [
+        {
+          "type": "timer",
+          "mode": "pulse",
+          "output": 1,
+          "duration_ms": 5000
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "name": "Desligar",
+      "trigger": {
+        "type": "event",
+        "input": 2,
+        "state": true
+      },
+      "conditions": [],
+      "actions": [
+        {
+          "type": "output",
+          "output": 1,
+          "action": "off"
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}

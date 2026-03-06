@@ -1,3 +1,5 @@
+# app/core/opcodes/input_config.py
+
 import struct
 
 

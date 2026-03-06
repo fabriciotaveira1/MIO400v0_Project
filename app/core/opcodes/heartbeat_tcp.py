@@ -1,3 +1,5 @@
+# app/core/opcodes/heartbeat_tcp.py
+
 import struct
 
 def build_heartbeat_tcp_configuration(

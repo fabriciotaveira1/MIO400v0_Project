@@ -77,7 +77,8 @@ def main() -> int:
 
         gui_cmd = [
             python_exe,
-            str(root_dir / "app" / "gui" / "main_window.py"),
+            "-m",
+            "app.gui.main_window",
             "--api-url",
             api_url,
         ]

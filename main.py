@@ -9,6 +9,7 @@ from app.api.routes_events import router as events_router
 from app.services.socket_listener import SocketListener
 from app.api.routes_health import router as health_router
 from app.api.routes_device import router as device_router
+from app.api.routes_automation import router as automation_router
 from app.services.device_monitor import DeviceMonitor
 
 
@@ -20,6 +21,7 @@ app.include_router(inputs_router)
 app.include_router(events_router)
 app.include_router(health_router)
 app.include_router(device_router)
+app.include_router(automation_router)
 
 @app.on_event("startup")
 def startup_services():

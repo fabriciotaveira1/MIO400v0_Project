@@ -1,3 +1,5 @@
+# api/routes_device.py
+
 from fastapi import APIRouter, HTTPException
 
 from app.models.schema import DeviceConfig

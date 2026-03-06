@@ -1,3 +1,5 @@
+# api/routes_events.py
+
 from fastapi import APIRouter, HTTPException
 
 from app.core.opcodes.host import build_host_configuration

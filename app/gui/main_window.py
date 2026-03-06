@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib import error, request
 
@@ -8,6 +9,8 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
+    QFormLayout,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -17,9 +20,18 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
+
+if __package__ is None or __package__ == "":
+    # Permite executar este arquivo diretamente sem quebrar imports "from app..."
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from app.gui.automation_tab import AutomationTab
 
 
 def _http_json(
@@ -121,25 +133,125 @@ class ConnectionWindow(QWidget):
         self.hide()
 
 
+class IONamesDialog(QDialog):
+    def __init__(
+        self,
+        parent=None,
+        input_count: int = 0,
+        output_count: int = 0,
+        io_names: Optional[Dict[str, Dict[str, str]]] = None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle("Personalizar nomes de I/O")
+        self.resize(760, 560)
+        self.input_count = max(0, input_count)
+        self.output_count = max(0, output_count)
+        self.io_names = io_names or {"inputs": {}, "outputs": {}}
+
+        root = QVBoxLayout(self)
+        info = QLabel(
+            "Defina nomes amigaveis para entradas e saidas. "
+            "Campos vazios usam o nome padrao."
+        )
+        info.setWordWrap(True)
+        root.addWidget(info)
+
+        form = QFormLayout()
+        self.inputs_table = self._build_table("inputs", self.input_count)
+        self.outputs_table = self._build_table("outputs", self.output_count)
+        form.addRow("Entradas", self.inputs_table)
+        form.addRow("Saidas", self.outputs_table)
+        root.addLayout(form)
+
+        buttons = QHBoxLayout()
+        save_btn = QPushButton("Salvar")
+        cancel_btn = QPushButton("Cancelar")
+        save_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(save_btn)
+        buttons.addWidget(cancel_btn)
+        root.addLayout(buttons)
+
+    def _build_table(self, kind: str, count: int) -> QTableWidget:
+        table = QTableWidget(count, 2, self)
+        table.setHorizontalHeaderLabels(["Canal", "Nome"])
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+        for channel in range(1, count + 1):
+            channel_item = QTableWidgetItem(f"{channel:02d}")
+            channel_item.setFlags(channel_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(channel - 1, 0, channel_item)
+
+            names = self.io_names.get(kind, {})
+            current_name = str(names.get(str(channel), "")).strip()
+            table.setItem(channel - 1, 1, QTableWidgetItem(current_name))
+        return table
+
+    def get_payload(self) -> Dict[str, Dict[str, str]]:
+        return {
+            "inputs": self._read_names(self.inputs_table),
+            "outputs": self._read_names(self.outputs_table),
+        }
+
+    @staticmethod
+    def _read_names(table: QTableWidget) -> Dict[str, str]:
+        names: Dict[str, str] = {}
+        for row in range(table.rowCount()):
+            channel = str(row + 1)
+            item = table.item(row, 1)
+            value = item.text().strip() if item is not None else ""
+            names[channel] = value
+        return names
+
+
 class MainWindow(QMainWindow):
     def __init__(self, api_base_url: str, device_info: Dict[str, Any]):
         super().__init__()
         self.api_base_url = api_base_url.rstrip("/")
         self.device_info = device_info or {}
+        self.io_names = {"inputs": {}, "outputs": {}}
         self.setWindowTitle("MIO400 - Painel de I/O")
-        self.resize(1100, 720)
+        self.resize(1180, 760)
 
-        self.input_labels: Dict[int, QLabel] = {}
-        self.output_labels: Dict[int, QLabel] = {}
+        self.input_name_labels: Dict[int, QLabel] = {}
+        self.output_name_labels: Dict[int, QLabel] = {}
+        self.output_control_name_labels: Dict[int, QLabel] = {}
+        self.input_state_labels: Dict[int, QLabel] = {}
+        self.output_state_labels: Dict[int, QLabel] = {}
         self.input_count = self._safe_int(self.device_info.get("inputs"), 0)
         self.output_count = self._safe_int(self.device_info.get("outputs"), 0)
         self._is_refreshing = False
+        self.automation_tab: Optional[AutomationTab] = None
 
+        self._load_io_names()
         self._build_ui()
         self._setup_timer()
         self.refresh_data()
 
+    def _load_io_names(self) -> None:
+        try:
+            names = _http_json("GET", f"{self.api_base_url}/io/names", timeout=2.0)
+            self.io_names = {
+                "inputs": dict(names.get("inputs", {})),
+                "outputs": dict(names.get("outputs", {})),
+            }
+        except Exception:
+            self.io_names = {"inputs": {}, "outputs": {}}
+
     def _build_ui(self) -> None:
+        tabs = QTabWidget()
+        tabs.addTab(self._build_io_tab(), "I/O")
+        self.automation_tab = AutomationTab(
+            self.api_base_url,
+            input_count=self.input_count,
+            output_count=self.output_count,
+            io_names=self.io_names,
+        )
+        tabs.addTab(self.automation_tab, "Automacao")
+        self.setCentralWidget(tabs)
+
+    def _build_io_tab(self) -> QWidget:
         root = QWidget()
         root_layout = QVBoxLayout(root)
         root_layout.setSpacing(12)
@@ -165,37 +277,43 @@ class MainWindow(QMainWindow):
         )
         self.device_label.setStyleSheet("font-weight: 600;")
         device_layout.addWidget(self.device_label)
+        edit_names_btn = QPushButton("Personalizar nomes de I/O")
+        edit_names_btn.clicked.connect(self._open_io_names_dialog)
+        device_layout.addWidget(edit_names_btn)
         device_layout.addStretch()
 
         io_layout = QHBoxLayout()
         io_layout.setSpacing(16)
-        self.inputs_panel = QWidget()
-        self.outputs_panel = QWidget()
-        io_layout.addWidget(self.inputs_panel)
-        io_layout.addWidget(self.outputs_panel)
-        self._set_panel_widget(
-            self.inputs_panel,
-            self._build_states_panel("Inputs", self.input_count, self.input_labels),
+        inputs_panel = self._build_states_panel(
+            "Entradas",
+            self.input_count,
+            "inputs",
+            self.input_state_labels,
+            self.input_name_labels,
         )
-        self._set_panel_widget(
-            self.outputs_panel,
-            self._build_states_panel("Outputs", self.output_count, self.output_labels),
+        outputs_panel = self._build_states_panel(
+            "Saidas",
+            self.output_count,
+            "outputs",
+            self.output_state_labels,
+            self.output_name_labels,
         )
+        io_layout.addWidget(inputs_panel)
+        io_layout.addWidget(outputs_panel)
 
-        control_title = QLabel("Controle de Reles")
+        control_title = QLabel("Controle de reles")
         control_title.setStyleSheet("font-size: 16px; font-weight: 700;")
-        self.control_scroll = QScrollArea()
-        self.control_scroll.setWidgetResizable(True)
-        self.control_scroll.setMinimumHeight(280)
-        self.control_scroll.setWidget(self._build_controls_panel(self.output_count))
+        control_scroll = QScrollArea()
+        control_scroll.setWidgetResizable(True)
+        control_scroll.setMinimumHeight(280)
+        control_scroll.setWidget(self._build_controls_panel(self.output_count))
 
         root_layout.addLayout(health_layout)
         root_layout.addLayout(device_layout)
         root_layout.addLayout(io_layout)
         root_layout.addWidget(control_title)
-        root_layout.addWidget(self.control_scroll)
-
-        self.setCentralWidget(root)
+        root_layout.addWidget(control_scroll)
+        return root
 
     def _setup_timer(self) -> None:
         self.timer = QTimer(self)
@@ -238,10 +356,10 @@ class MainWindow(QMainWindow):
         inputs = io_data.get("inputs", {})
         outputs = io_data.get("outputs", {})
 
-        for channel, label in self.input_labels.items():
+        for channel, label in self.input_state_labels.items():
             self._set_on_off(label, self._to_bool(inputs.get(str(channel), inputs.get(channel, False))))
 
-        for channel, label in self.output_labels.items():
+        for channel, label in self.output_state_labels.items():
             self._set_on_off(label, self._to_bool(outputs.get(str(channel), outputs.get(channel, False))))
 
     def _apply_health_state(self, health_data: Dict[str, Any]) -> None:
@@ -249,7 +367,14 @@ class MainWindow(QMainWindow):
         self.health_indicator.setText("ONLINE" if online else "OFFLINE")
         self._set_indicator_color(self.health_indicator, "#2e7d32" if online else "#c62828")
 
-    def _build_states_panel(self, title: str, count: int, store: Dict[int, QLabel]) -> QWidget:
+    def _build_states_panel(
+        self,
+        title: str,
+        count: int,
+        kind: str,
+        state_store: Dict[int, QLabel],
+        name_store: Dict[int, QLabel],
+    ) -> QWidget:
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
 
@@ -263,15 +388,16 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout()
         for channel in range(1, count + 1):
-            name = QLabel(f"{channel:02d}")
+            name = QLabel(self._channel_name(kind, channel))
             state = QLabel("OFF")
             state.setAlignment(Qt.AlignmentFlag.AlignCenter)
             state.setMinimumWidth(64)
             self._set_indicator_color(state, "#b0bec5")
 
-            store[channel] = state
-            row = (channel - 1) // 4
-            col = ((channel - 1) % 4) * 2
+            state_store[channel] = state
+            name_store[channel] = name
+            row = (channel - 1) // 2
+            col = ((channel - 1) % 2) * 2
             grid.addWidget(name, row, col)
             grid.addWidget(state, row, col + 1)
 
@@ -288,7 +414,7 @@ class MainWindow(QMainWindow):
             return holder
 
         for channel in range(1, output_count + 1):
-            name = QLabel(f"Rele {channel:02d}")
+            name = QLabel(self._channel_name("outputs", channel))
             on_btn = QPushButton("Ligar")
             off_btn = QPushButton("Desligar")
 
@@ -300,26 +426,52 @@ class MainWindow(QMainWindow):
             )
 
             row = channel - 1
+            self.output_control_name_labels[channel] = name
             layout.addWidget(name, row, 0)
             layout.addWidget(on_btn, row, 1)
             layout.addWidget(off_btn, row, 2)
 
         return holder
 
-    @staticmethod
-    def _set_panel_widget(panel: QWidget, widget: QWidget) -> None:
-        old_layout = panel.layout()
-        if old_layout is not None:
-            while old_layout.count():
-                item = old_layout.takeAt(0)
-                child = item.widget()
-                if child is not None:
-                    child.deleteLater()
-            old_layout.deleteLater()
+    def _open_io_names_dialog(self) -> None:
+        dialog = IONamesDialog(
+            self,
+            input_count=self.input_count,
+            output_count=self.output_count,
+            io_names=self.io_names,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
 
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(widget)
+        payload = dialog.get_payload()
+        try:
+            updated = _http_json("POST", f"{self.api_base_url}/io/names", payload=payload, timeout=2.0)
+            self.io_names = {
+                "inputs": dict(updated.get("inputs", payload.get("inputs", {}))),
+                "outputs": dict(updated.get("outputs", payload.get("outputs", {}))),
+            }
+            self._refresh_io_name_labels()
+            if self.automation_tab is not None:
+                self.automation_tab.update_io_context(self.io_names)
+            QMessageBox.information(self, "Nomes salvos", "Nomes de I/O atualizados com sucesso.")
+        except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Erro", f"Nao foi possivel salvar os nomes:\n{exc}")
+
+    def _refresh_io_name_labels(self) -> None:
+        for channel, label in self.input_name_labels.items():
+            label.setText(self._channel_name("inputs", channel))
+        for channel, label in self.output_name_labels.items():
+            label.setText(self._channel_name("outputs", channel))
+        for channel, label in self.output_control_name_labels.items():
+            label.setText(self._channel_name("outputs", channel))
+
+    def _channel_name(self, kind: str, channel: int) -> str:
+        names = self.io_names.get(kind, {})
+        custom = str(names.get(str(channel), "")).strip()
+        prefix = "Entrada" if kind == "inputs" else "Saida"
+        if custom:
+            return f"{channel:02d} - {custom}"
+        return f"{prefix} {channel:02d}"
 
     @staticmethod
     def _to_bool(value: Any) -> bool:
