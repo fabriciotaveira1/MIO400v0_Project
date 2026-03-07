@@ -32,6 +32,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.gui.automation_tab import AutomationTab
+from app.gui.config_loader import load_config, save_config
 
 
 def _http_json(
@@ -103,6 +104,8 @@ class ConnectionWindow(QWidget):
     def _connect(self) -> None:
         api_host = self.api_ip_input.text().strip()
         device_ip = self.device_ip_input.text().strip()
+        api_port = self.api_port_input.value()
+        device_port = self.device_port_input.value()
 
         if not api_host:
             QMessageBox.warning(self, "Erro", "Informe o IP do servidor API.")
@@ -111,14 +114,28 @@ class ConnectionWindow(QWidget):
             QMessageBox.warning(self, "Erro", "Informe o IP da controladora MIO.")
             return
 
-        api_base_url = f"http://{api_host}:{self.api_port_input.value()}"
+        try:
+            save_config(
+                {
+                    "api": {"ip": api_host, "port": api_port},
+                    "device": {"ip": device_ip, "port": device_port},
+                }
+            )
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                f"Nao foi possivel salvar config.json automaticamente:\n{exc}",
+            )
+
+        api_base_url = f"http://{api_host}:{api_port}"
         try:
             _http_json(
                 "POST",
                 f"{api_base_url}/device/configure",
                 payload={
                     "device_ip": device_ip,
-                    "device_port": self.device_port_input.value(),
+                    "device_port": device_port,
                 },
                 timeout=2.0,
             )
@@ -532,9 +549,19 @@ def main() -> None:
         help="Compatibilidade: URL completa da API para preencher IP/porta iniciais",
     )
     args = parser.parse_args()
+    config = load_config()
 
-    default_api_ip = args.ip
-    default_api_port = args.port
+    default_api_ip = str(config.get("api", {}).get("ip", args.ip))
+    default_api_port = int(config.get("api", {}).get("port", args.port))
+    default_device_ip = str(config.get("device", {}).get("ip", args.device_ip))
+    default_device_port = int(config.get("device", {}).get("port", args.device_port))
+
+    cli_overrides = {"--ip", "--port", "--device-ip", "--device-port"}
+    if any(flag in sys.argv[1:] for flag in cli_overrides):
+        default_api_ip = args.ip
+        default_api_port = args.port
+        default_device_ip = args.device_ip
+        default_device_port = args.device_port
     if args.api_url:
         default_api_ip, default_api_port = _parse_api_url(args.api_url)
 
@@ -542,8 +569,8 @@ def main() -> None:
     window = ConnectionWindow(
         default_api_ip=default_api_ip,
         default_api_port=default_api_port,
-        default_device_ip=args.device_ip,
-        default_device_port=args.device_port,
+        default_device_ip=default_device_ip,
+        default_device_port=default_device_port,
     )
     window.show()
     sys.exit(app.exec())

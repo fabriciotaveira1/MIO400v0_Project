@@ -1,36 +1,3 @@
 {
-  "rules": [
-    {
-      "id": 5,
-      "name": "Regra sem nome",
-      "trigger": {
-        "type": "INPUT_ON",
-        "input": 1
-      },
-      "conditions": [],
-      "actions": [
-        {
-          "type": "OUTPUT_OFF",
-          "output": 1
-        }
-      ],
-      "enabled": true
-    },
-    {
-      "id": 6,
-      "name": "Regra sem nome",
-      "trigger": {
-        "type": "INPUT_ON",
-        "input": 1
-      },
-      "conditions": [],
-      "actions": [
-        {
-          "type": "OUTPUT_ON",
-          "output": 1
-        }
-      ],
-      "enabled": true
-    }
-  ]
+  "rules": []
 }

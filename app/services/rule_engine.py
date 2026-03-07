@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ class RuleEngine:
 
         self._last_schedule_fire: Dict[int, str] = {}
         self._last_timer_fire: Dict[int, float] = {}
+        self._reconcile_queue: List[Dict[str, Any]] = []
 
         self._load()
         self._thread = threading.Thread(target=self._scan_loop, daemon=True)
@@ -148,6 +150,7 @@ class RuleEngine:
     def _scan_loop(self) -> None:
         while self._running:
             self._evaluate_rules({"source": "scan", "now": datetime.now()})
+            self._process_reconcile_queue()
             time.sleep(0.5)
 
     def _evaluate_rules(self, context: Dict[str, Any]) -> None:
@@ -160,11 +163,26 @@ class RuleEngine:
             if not self._evaluate_conditions(rule.get("conditions", []), context):
                 continue
             thread = threading.Thread(
-                target=self._execute_actions_sequential,
-                args=(list(rule.get("actions", [])),),
+                target=self._execute_rule,
+                args=(rule, context),
                 daemon=True,
             )
             thread.start()
+
+    def _execute_rule(self, rule: Dict[str, Any], context: Dict[str, Any]) -> None:
+        started_at = datetime.now()
+        success = self._execute_actions_sequential(list(rule.get("actions", [])))
+        duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+        entry = {
+            "timestamp": started_at.isoformat(timespec="seconds"),
+            "rule_id": int(rule.get("id", 0)),
+            "rule_name": str(rule.get("name", "")),
+            "source": str(context.get("source", "")),
+            "trigger": dict(rule.get("trigger", {})),
+            "success": bool(success),
+            "duration_ms": duration_ms,
+        }
+        print(f"[RULE_ENGINE] {json.dumps(entry, ensure_ascii=True)}")
 
     def _trigger_matches(self, rule: Dict[str, Any], context: Dict[str, Any]) -> bool:
         trigger = dict(rule.get("trigger", {}))
@@ -253,7 +271,8 @@ class RuleEngine:
 
         return True
 
-    def _execute_actions_sequential(self, actions: List[Dict[str, Any]]) -> None:
+    def _execute_actions_sequential(self, actions: List[Dict[str, Any]]) -> bool:
+        success = True
         for action in actions:
             action_type = _upper(action.get("type"))
             if action_type == "DELAY":
@@ -266,41 +285,85 @@ class RuleEngine:
 
             output = int(action.get("output", 0))
             if output <= 0:
+                success = False
                 continue
 
             if action_type == "OUTPUT_ON":
-                self._send_output(output, action=1)
+                ok = self._send_output_with_retry(output=output, action=1, expected_state=True)
+                success = success and ok
+                if not ok:
+                    self._enqueue_reconcile(output=output, action=1, expected_state=True)
                 continue
             if action_type == "OUTPUT_OFF":
-                self._send_output(output, action=0)
+                ok = self._send_output_with_retry(output=output, action=0, expected_state=False)
+                success = success and ok
+                if not ok:
+                    self._enqueue_reconcile(output=output, action=0, expected_state=False)
                 continue
             if action_type == "OUTPUT_TOGGLE":
-                self._send_output(output, action=2)
+                ok = self._send_output_with_retry(output=output, action=2, expected_state=None)
+                success = success and ok
                 continue
             if action_type == "OUTPUT_PULSE":
                 t_on = int(action.get("t_on", 0))
                 total_time = int(action.get("total_time", 0))
                 t_off = max(0, total_time - t_on) if total_time > 0 else 0
-                self._send_output(
+                ok = self._send_output_with_retry(
                     output,
                     action=1,
                     total_time=total_time,
                     t_on=t_on,
                     t_off=t_off,
+                    expected_state=None,
                 )
+                success = success and ok
+                continue
 
-    @staticmethod
-    def _send_output(
+            success = False
+
+        return success
+
+    def _send_output_with_retry(
+        self,
         output: int,
         action: int,
         total_time: int = 0,
         t_on: int = 0,
         t_off: int = 0,
-    ) -> None:
+        expected_state: Optional[bool] = None,
+        max_attempts: int = 3,
+    ) -> bool:
+        backoff = [0.1, 0.2, 0.4]
+        for attempt in range(max_attempts):
+            response = self._send_output(
+                output=output,
+                action=action,
+                total_time=total_time,
+                t_on=t_on,
+                t_off=t_off,
+            )
+            status = str(response.get("status", ""))
+            if status == "ack":
+                if expected_state is None or self._verify_output_state(output, expected_state):
+                    return True
+
+            if attempt < max_attempts - 1:
+                time.sleep(backoff[min(attempt, len(backoff) - 1)])
+
+        return False
+
+    def _send_output(
+        self,
+        output: int,
+        action: int,
+        total_time: int = 0,
+        t_on: int = 0,
+        t_off: int = 0,
+    ) -> Dict[str, Any]:
         try:
             client = device_manager.get_client()
         except RuntimeError:
-            return
+            return {"status": "error", "message": "device_not_configured"}
 
         payload = build_output_command(
             component_addr=output,
@@ -310,7 +373,67 @@ class RuleEngine:
             t_off=t_off,
             memory=0,
         )
-        client.send(opcode=1, application_data=payload)
+        return client.send(opcode=1, application_data=payload)
+
+    def _verify_output_state(self, output: int, expected_state: bool, attempts: int = 2) -> bool:
+        try:
+            client = device_manager.get_client()
+        except RuntimeError:
+            return False
+
+        for _ in range(attempts):
+            response = client.send(opcode=2, application_data=b"")
+            if response.get("status") == "data":
+                mask = int(response.get("value", 0))
+                current = bool(mask & (1 << (output - 1)))
+                if current == expected_state:
+                    return True
+            time.sleep(0.08)
+        return False
+
+    def _enqueue_reconcile(self, output: int, action: int, expected_state: Optional[bool]) -> None:
+        with self._lock:
+            self._reconcile_queue.append(
+                {
+                    "output": output,
+                    "action": action,
+                    "expected_state": expected_state,
+                    "attempts": 0,
+                    "next_run_ts": time.time() + 0.5,
+                }
+            )
+
+    def _process_reconcile_queue(self) -> None:
+        now = time.time()
+        with self._lock:
+            queue = list(self._reconcile_queue)
+            self._reconcile_queue = []
+
+        pending: List[Dict[str, Any]] = []
+        for item in queue:
+            if float(item.get("next_run_ts", 0)) > now:
+                pending.append(item)
+                continue
+
+            ok = self._send_output_with_retry(
+                output=int(item.get("output", 0)),
+                action=int(item.get("action", 0)),
+                expected_state=item.get("expected_state"),
+                max_attempts=1,
+            )
+            if ok:
+                continue
+
+            attempts = int(item.get("attempts", 0)) + 1
+            if attempts >= 8:
+                continue
+
+            item["attempts"] = attempts
+            item["next_run_ts"] = now + min(4.0, 0.5 * (2 ** attempts))
+            pending.append(item)
+
+        with self._lock:
+            self._reconcile_queue.extend(pending)
 
     def _normalize_rule(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         trigger = self._normalize_trigger(dict(payload.get("trigger", {})))
