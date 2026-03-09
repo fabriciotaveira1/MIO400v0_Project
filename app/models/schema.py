@@ -15,6 +15,15 @@ class DeviceConfig(BaseModel):
     device_port: int = 5000
 
 
+class HeartbeatTcpConfigRequest(BaseModel):
+    data_code: int = Field(4, ge=0, le=0xFFFFFFFF)
+    interval_ms: int = Field(3000, ge=1, le=0xFFFFFFFF)
+
+
+class EnableRequest(BaseModel):
+    enabled: bool
+
+
 class RulePayload(BaseModel):
     id: Optional[int] = None
     name: str

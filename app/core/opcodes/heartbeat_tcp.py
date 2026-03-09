@@ -2,6 +2,7 @@
 
 import struct
 
+
 def build_heartbeat_tcp_configuration(
     data_code: int = 4,      # 4 = inputs + outputs
     interval_ms: int = 3000  # intervalo em milissegundos
@@ -12,3 +13,10 @@ def build_heartbeat_tcp_configuration(
     data += struct.pack(">I", interval_ms)
 
     return data
+
+
+def build_heartbeat_tcp_read_request() -> bytes:
+    """
+    Opcode 91 - leitura da configuracao de heartbeat TCP.
+    """
+    return b""

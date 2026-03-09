@@ -55,6 +55,18 @@ class CommboxClient:
 
             clean_opcode = opcode & 0x7FFFFFFF
 
+            if opcode & 0x40000000:
+                if len(payload) >= 8:
+                    error_code = struct.unpack(">I", payload[0:4])[0]
+                    error_data = struct.unpack(">I", payload[4:8])[0]
+                    return {
+                        "status": "nack",
+                        "opcode": opcode,
+                        "error_code": error_code,
+                        "error_data": error_data
+                    }
+                return {"status": "nack", "opcode": opcode}
+
             # Caso 4 bytes (Opcode 02 ou 06)
             if data_size == 4:
                 value = struct.unpack(">I", payload)[0]
@@ -66,8 +78,8 @@ class CommboxClient:
                     "payload": payload
                 }
 
-            # Caso 8 bytes (Opcode 03)
-            if data_size == 8:
+            # Caso 8 bytes de leitura combinada de entradas/saidas (Opcode 03)
+            if data_size == 8 and clean_opcode == 3:
                 input_mask = struct.unpack(">I", payload[0:4])[0]
                 output_mask = struct.unpack(">I", payload[4:8])[0]
 
@@ -78,18 +90,6 @@ class CommboxClient:
                     "outputs": output_mask,
                     "payload": payload
                 }
-            
-            if opcode & 0x40000000:
-                error_code = struct.unpack(">I", payload[0:4])[0]
-                error_data = struct.unpack(">I", payload[4:8])[0]
-
-                return {
-                    "status": "nack",
-                    "opcode": opcode,
-                    "error_code": error_code,
-                    "error_data": error_data
-                }
-
             return {
                 "status": "data_raw",
                 "opcode": clean_opcode,
