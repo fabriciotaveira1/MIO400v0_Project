@@ -1,4 +1,14 @@
 {
-  "inputs": {},
-  "outputs": {}
+  "inputs": {
+    "1": "Motor",
+    "2": "Fotocelula",
+    "3": "",
+    "4": ""
+  },
+  "outputs": {
+    "1": "Fotocelula",
+    "2": "",
+    "3": "",
+    "4": ""
+  }
 }

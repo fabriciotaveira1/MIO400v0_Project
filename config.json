@@ -1,10 +1,19 @@
 {
-    "api": {
-        "ip": "127.0.0.1",
-        "port": 8000
+  "devices": [
+    {
+      "name": "Dispositivo 1",
+      "server_ip": "127.0.0.1",
+      "device_ip": "192.168.26.228",
+      "port": 5000,
+      "api_port": 8000
     },
-    "device": {
-        "ip": "192.168.26.228",
-        "port": 5000
+    {
+      "name": "Dispositivo CLI",
+      "server_ip": "127.0.0.1",
+      "device_ip": "192.168.1.100",
+      "port": 5000,
+      "api_port": 8000
     }
+  ],
+  "last_device": "Dispositivo 1"
 }

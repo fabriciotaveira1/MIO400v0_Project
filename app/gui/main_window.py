@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFormLayout,
     QGridLayout,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QStatusBar,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -28,11 +30,16 @@ from PyQt6.QtWidgets import (
 )
 
 if __package__ is None or __package__ == "":
-    # Permite executar este arquivo diretamente sem quebrar imports "from app..."
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.gui.automation_tab import AutomationTab
-from app.gui.config_loader import load_config, save_config
+from app.gui.config_loader import (
+    DEFAULT_API_PORT,
+    load_config,
+    save_config,
+    set_last_device,
+    upsert_device,
+)
 
 
 def _http_json(
@@ -54,100 +61,92 @@ def _http_json(
         return json.loads(body) if body else {}
 
 
-class ConnectionWindow(QWidget):
-    def __init__(
-        self,
-        default_api_ip: str = "127.0.0.1",
-        default_api_port: int = 8000,
-        default_device_ip: str = "192.168.1.100",
-        default_device_port: int = 5000,
-    ):
-        super().__init__()
-        self.main_window: Optional[MainWindow] = None
-        self.setWindowTitle("MIO400 - Conexao")
-        self.resize(420, 260)
+def _parse_api_url(api_url: str) -> tuple[str, int]:
+    value = api_url.strip()
+    if value.startswith("http://"):
+        value = value[7:]
+    if value.startswith("https://"):
+        value = value[8:]
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-
-        api_ip_label = QLabel("IP do Servidor API")
-        self.api_ip_input = QLineEdit(default_api_ip)
-        self.api_ip_input.setPlaceholderText("Ex: 127.0.0.1")
-
-        api_port_label = QLabel("Porta da API")
-        self.api_port_input = QSpinBox()
-        self.api_port_input.setRange(1, 65535)
-        self.api_port_input.setValue(default_api_port)
-
-        device_ip_label = QLabel("IP da Controladora MIO")
-        self.device_ip_input = QLineEdit(default_device_ip)
-        self.device_ip_input.setPlaceholderText("Ex: 192.168.1.100")
-
-        device_port_label = QLabel("Porta da MIO")
-        self.device_port_input = QSpinBox()
-        self.device_port_input.setRange(1, 65535)
-        self.device_port_input.setValue(default_device_port)
-
-        self.connect_button = QPushButton("Conectar")
-        self.connect_button.clicked.connect(self._connect)
-
-        layout.addWidget(api_ip_label)
-        layout.addWidget(self.api_ip_input)
-        layout.addWidget(api_port_label)
-        layout.addWidget(self.api_port_input)
-        layout.addWidget(device_ip_label)
-        layout.addWidget(self.device_ip_input)
-        layout.addWidget(device_port_label)
-        layout.addWidget(self.device_port_input)
-        layout.addWidget(self.connect_button)
-
-    def _connect(self) -> None:
-        api_host = self.api_ip_input.text().strip()
-        device_ip = self.device_ip_input.text().strip()
-        api_port = self.api_port_input.value()
-        device_port = self.device_port_input.value()
-
-        if not api_host:
-            QMessageBox.warning(self, "Erro", "Informe o IP do servidor API.")
-            return
-        if not device_ip:
-            QMessageBox.warning(self, "Erro", "Informe o IP da controladora MIO.")
-            return
-
+    if ":" in value:
+        host, port_text = value.rsplit(":", 1)
         try:
-            save_config(
-                {
-                    "api": {"ip": api_host, "port": api_port},
-                    "device": {"ip": device_ip, "port": device_port},
-                }
-            )
-        except OSError as exc:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                f"Nao foi possivel salvar config.json automaticamente:\n{exc}",
-            )
+            return host.strip(), int(port_text.strip())
+        except ValueError:
+            return value.strip(), DEFAULT_API_PORT
+    return value.strip(), DEFAULT_API_PORT
 
-        api_base_url = f"http://{api_host}:{api_port}"
+
+class ConnectionConfigDialog(QDialog):
+    def __init__(self, parent=None, initial: Optional[Dict[str, Any]] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Configuracao de Conexao")
+        self.resize(460, 250)
+        self.result_action = "cancel"
+
+        device = initial or {}
+
+        root = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.name_input = QLineEdit(str(device.get("name", "")))
+        self.server_ip_input = QLineEdit(str(device.get("server_ip", "127.0.0.1")))
+        self.device_ip_input = QLineEdit(str(device.get("device_ip", "192.168.1.100")))
+
+        self.port_input = QSpinBox()
+        self.port_input.setRange(1, 65535)
+        self.port_input.setValue(self._safe_int(device.get("port"), 5000))
+
+        form.addRow("Nome do dispositivo", self.name_input)
+        form.addRow("IP do Servidor", self.server_ip_input)
+        form.addRow("IP do Dispositivo", self.device_ip_input)
+        form.addRow("Porta", self.port_input)
+        root.addLayout(form)
+
+        buttons = QHBoxLayout()
+        save_btn = QPushButton("Salvar")
+        connect_btn = QPushButton("Conectar")
+        cancel_btn = QPushButton("Cancelar")
+
+        save_btn.clicked.connect(lambda: self._finish("save"))
+        connect_btn.clicked.connect(lambda: self._finish("connect"))
+        cancel_btn.clicked.connect(self.reject)
+
+        buttons.addWidget(save_btn)
+        buttons.addWidget(connect_btn)
+        buttons.addWidget(cancel_btn)
+        root.addLayout(buttons)
+
+    @staticmethod
+    def _safe_int(value: Any, fallback: int) -> int:
         try:
-            _http_json(
-                "POST",
-                f"{api_base_url}/device/configure",
-                payload={
-                    "device_ip": device_ip,
-                    "device_port": device_port,
-                },
-                timeout=2.0,
-            )
-            device_info = _http_json("GET", f"{api_base_url}/device/capabilities", timeout=4.0)
-            _http_json("GET", f"{api_base_url}/device/health", timeout=2.0)
-        except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError):
-            QMessageBox.critical(self, "Erro", "Nao foi possivel conectar ao dispositivo")
-            return
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
 
-        self.main_window = MainWindow(api_base_url=api_base_url, device_info=device_info)
-        self.main_window.show()
-        self.hide()
+    def _finish(self, action: str) -> None:
+        if not self.device_payload():
+            return
+        self.result_action = action
+        self.accept()
+
+    def device_payload(self) -> Optional[Dict[str, Any]]:
+        payload = {
+            "name": self.name_input.text().strip(),
+            "server_ip": self.server_ip_input.text().strip(),
+            "device_ip": self.device_ip_input.text().strip(),
+            "port": int(self.port_input.value()),
+        }
+        if not payload["name"]:
+            QMessageBox.warning(self, "Campo obrigatorio", "Informe o nome do dispositivo.")
+            return None
+        if not payload["server_ip"]:
+            QMessageBox.warning(self, "Campo obrigatorio", "Informe o IP do servidor.")
+            return None
+        if not payload["device_ip"]:
+            QMessageBox.warning(self, "Campo obrigatorio", "Informe o IP do dispositivo.")
+            return None
+        return payload
 
 
 class IONamesDialog(QDialog):
@@ -167,8 +166,8 @@ class IONamesDialog(QDialog):
 
         root = QVBoxLayout(self)
         info = QLabel(
-            "Defina nomes amigaveis para entradas e saidas. "
-            "Campos vazios usam o nome padrao."
+            "Defina apelidos para entradas e saidas. O rotulo fixo (Entrada 01, Saida 01, etc.) "
+            "sempre sera mantido para identificacao."
         )
         info.setWordWrap(True)
         root.addWidget(info)
@@ -191,12 +190,14 @@ class IONamesDialog(QDialog):
 
     def _build_table(self, kind: str, count: int) -> QTableWidget:
         table = QTableWidget(count, 2, self)
-        table.setHorizontalHeaderLabels(["Canal", "Nome"])
+        table.setHorizontalHeaderLabels(["Canal fixo", "Apelido"])
         table.verticalHeader().setVisible(False)
         table.horizontalHeader().setStretchLastSection(True)
         table.setAlternatingRowColors(True)
+
+        prefix = "Entrada" if kind == "inputs" else "Saida"
         for channel in range(1, count + 1):
-            channel_item = QTableWidgetItem(f"{channel:02d}")
+            channel_item = QTableWidgetItem(f"{prefix} {channel:02d}")
             channel_item.setFlags(channel_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             table.setItem(channel - 1, 0, channel_item)
 
@@ -223,30 +224,263 @@ class IONamesDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, api_base_url: str, device_info: Dict[str, Any]):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__()
-        self.api_base_url = api_base_url.rstrip("/")
-        self.device_info = device_info or {}
-        self.io_names = {"inputs": {}, "outputs": {}}
         self.setWindowTitle("MIO400 - Painel de I/O")
-        self.resize(1180, 760)
+        self.resize(1200, 780)
 
+        self.config = config or load_config()
+        self.api_base_url = ""
+        self.current_device_name = ""
+        self.current_device: Optional[Dict[str, Any]] = None
+        self.device_info: Dict[str, Any] = {}
+        self.io_names = {"inputs": {}, "outputs": {}}
+        self.connected = False
+        self._is_refreshing = False
+        self._offline_cycles = 0
+        self._is_auto_reconnecting = False
+
+        self.input_count = 0
+        self.output_count = 0
         self.input_name_labels: Dict[int, QLabel] = {}
         self.output_name_labels: Dict[int, QLabel] = {}
         self.output_control_name_labels: Dict[int, QLabel] = {}
         self.input_state_labels: Dict[int, QLabel] = {}
         self.output_state_labels: Dict[int, QLabel] = {}
-        self.input_count = self._safe_int(self.device_info.get("inputs"), 0)
-        self.output_count = self._safe_int(self.device_info.get("outputs"), 0)
-        self._is_refreshing = False
         self.automation_tab: Optional[AutomationTab] = None
 
+        self._build_shell_ui()
+        self._populate_devices()
+        self._setup_timers()
+        QTimer.singleShot(0, self._startup_flow)
+
+    def _build_shell_ui(self) -> None:
+        container = QWidget()
+        root = QVBoxLayout(container)
+        root.setSpacing(8)
+
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Dispositivo ativo:"))
+
+        self.device_combo = QComboBox()
+        self.device_combo.setMinimumWidth(260)
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
+        controls.addWidget(self.device_combo)
+
+        self.manage_btn = QPushButton("Configurar")
+        self.manage_btn.clicked.connect(self._open_connection_dialog)
+        controls.addWidget(self.manage_btn)
+
+        self.connect_btn = QPushButton("Conectar")
+        self.connect_btn.clicked.connect(lambda: self.connect_selected_device(manual=True))
+        controls.addWidget(self.connect_btn)
+
+        self.disconnect_btn = QPushButton("Desconectar")
+        self.disconnect_btn.clicked.connect(self.disconnect_current_device)
+        controls.addWidget(self.disconnect_btn)
+
+        self.reconnect_btn = QPushButton("Reconectar")
+        self.reconnect_btn.clicked.connect(self.reconnect_current_device)
+        controls.addWidget(self.reconnect_btn)
+
+        controls.addStretch()
+        root.addLayout(controls)
+
+        self.tabs = QTabWidget()
+        root.addWidget(self.tabs)
+        self.setCentralWidget(container)
+
+        status_bar = QStatusBar(self)
+        self.setStatusBar(status_bar)
+        self.connection_status_label = QLabel("Status: Desconectado")
+        self.log_label = QLabel("Pronto")
+        status_bar.addPermanentWidget(self.connection_status_label)
+        status_bar.addWidget(self.log_label, 1)
+
+        self._rebuild_tabs()
+
+    def _setup_timers(self) -> None:
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.setInterval(1000)
+        self.refresh_timer.timeout.connect(self.refresh_data)
+        self.refresh_timer.start()
+
+        self.watchdog_timer = QTimer(self)
+        self.watchdog_timer.setInterval(4000)
+        self.watchdog_timer.timeout.connect(self._watchdog_check)
+        self.watchdog_timer.start()
+
+    def _startup_flow(self) -> None:
+        if self.device_combo.count() == 0:
+            self._log("Nenhum dispositivo salvo. Abrindo configuracao de conexao.")
+            self._open_connection_dialog(force_connect=False)
+            return
+
+        self.connect_selected_device(manual=False)
+
+    def _populate_devices(self) -> None:
+        self.device_combo.blockSignals(True)
+        self.device_combo.clear()
+        devices = list(self.config.get("devices", []))
+        for device in devices:
+            self.device_combo.addItem(str(device.get("name", "")), dict(device))
+
+        last = str(self.config.get("last_device", "")).strip()
+        if last:
+            idx = self.device_combo.findText(last)
+            if idx >= 0:
+                self.device_combo.setCurrentIndex(idx)
+
+        self.device_combo.blockSignals(False)
+
+    def _selected_device(self) -> Optional[Dict[str, Any]]:
+        data = self.device_combo.currentData()
+        return dict(data) if isinstance(data, dict) else None
+
+    def _open_connection_dialog(self, force_connect: bool = False) -> None:
+        initial = self._selected_device()
+        dialog = ConnectionConfigDialog(self, initial=initial)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        payload = dialog.device_payload()
+        if payload is None:
+            return
+
+        self.config = upsert_device(self.config, payload, make_last=True)
+        save_config(self.config)
+        self._populate_devices()
+        index = self.device_combo.findText(payload["name"])
+        if index >= 0:
+            self.device_combo.setCurrentIndex(index)
+
+        self._log(f"Dispositivo salvo: {payload['name']}")
+        if force_connect or dialog.result_action == "connect":
+            self.connect_selected_device(manual=True)
+
+    def _on_device_changed(self) -> None:
+        device = self._selected_device()
+        if device is None:
+            return
+        self.config = set_last_device(self.config, str(device.get("name", "")))
+        save_config(self.config)
+        self._log(f"Dispositivo ativo alterado para: {device.get('name', '')}")
+
+    def connect_selected_device(self, manual: bool) -> bool:
+        device = self._selected_device()
+        if device is None:
+            if manual:
+                QMessageBox.warning(self, "Sem dispositivo", "Configure um dispositivo primeiro.")
+            self._set_connection_status("Desconectado")
+            return False
+
+        server_ip = str(device.get("server_ip", "")).strip()
+        device_ip = str(device.get("device_ip", "")).strip()
+        api_port = self._safe_int(device.get("api_port"), DEFAULT_API_PORT)
+        device_port = self._safe_int(device.get("port"), 5000)
+
+        if not server_ip or not device_ip:
+            if manual:
+                QMessageBox.warning(self, "Configuracao invalida", "Preencha IP do servidor e do dispositivo.")
+            return False
+
+        self._set_connection_status("Reconectando..." if self.connected else "Conectando...")
+        self._log(f"Conectando em {device.get('name', '')} ({server_ip} -> {device_ip}:{device_port})")
+
+        api_base_url = f"http://{server_ip}:{api_port}"
+        try:
+            _http_json(
+                "POST",
+                f"{api_base_url}/device/configure",
+                payload={"device_ip": device_ip, "device_port": device_port},
+                timeout=2.0,
+            )
+            device_info = _http_json("GET", f"{api_base_url}/device/capabilities", timeout=4.0)
+            _http_json("GET", f"{api_base_url}/device/health", timeout=2.0)
+        except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
+            self.connected = False
+            self._set_connection_status("Desconectado")
+            self._log(f"Falha de conexao: {exc}")
+            if manual:
+                QMessageBox.critical(self, "Erro", "Nao foi possivel conectar ao dispositivo")
+            return False
+
+        self.api_base_url = api_base_url.rstrip("/")
+        self.current_device = device
+        self.current_device_name = str(device.get("name", ""))
+        self.device_info = dict(device_info)
+        self.input_count = self._safe_int(self.device_info.get("inputs"), 0)
+        self.output_count = self._safe_int(self.device_info.get("outputs"), 0)
+        self.connected = True
+        self._offline_cycles = 0
+
+        self.config = set_last_device(self.config, self.current_device_name)
+        save_config(self.config)
         self._load_io_names()
-        self._build_ui()
-        self._setup_timer()
+        self._rebuild_tabs()
         self.refresh_data()
 
+        self._set_connection_status("Conectado")
+        self._log(f"Conectado ao dispositivo {self.current_device_name}")
+        return True
+
+    def disconnect_current_device(self) -> None:
+        if not self.current_device:
+            self.connected = False
+            self._set_connection_status("Desconectado")
+            return
+
+        api_base_url = self._api_base_for_device(self.current_device)
+        try:
+            _http_json("POST", f"{api_base_url}/device/disconnect", timeout=1.5)
+        except Exception:
+            pass
+
+        self.connected = False
+        self._offline_cycles = 0
+        self._apply_health_state({"online": False})
+        self._set_connection_status("Desconectado")
+        self._log("Conexao encerrada")
+
+    def reconnect_current_device(self) -> None:
+        if self._selected_device() is None:
+            QMessageBox.warning(self, "Sem dispositivo", "Selecione um dispositivo para reconectar.")
+            return
+
+        self._set_connection_status("Reconectando...")
+        if self.connected:
+            self.disconnect_current_device()
+        self.connect_selected_device(manual=True)
+
+    def _watchdog_check(self) -> None:
+        if not self.connected or self._is_auto_reconnecting:
+            return
+
+        online_text = ""
+        if hasattr(self, "health_indicator"):
+            online_text = self.health_indicator.text().strip().upper()
+
+        if online_text == "ONLINE":
+            self._offline_cycles = 0
+            return
+
+        self._offline_cycles += 1
+        if self._offline_cycles < 2:
+            return
+
+        self._is_auto_reconnecting = True
+        self._set_connection_status("Reconectando...")
+        self._log("Watchdog detectou offline. Tentando reconexao automatica.")
+        self.disconnect_current_device()
+        ok = self.connect_selected_device(manual=False)
+        if not ok:
+            self._set_connection_status("Desconectado")
+        self._is_auto_reconnecting = False
+
     def _load_io_names(self) -> None:
+        if not self.api_base_url:
+            self.io_names = {"inputs": {}, "outputs": {}}
+            return
         try:
             names = _http_json("GET", f"{self.api_base_url}/io/names", timeout=2.0)
             self.io_names = {
@@ -256,17 +490,26 @@ class MainWindow(QMainWindow):
         except Exception:
             self.io_names = {"inputs": {}, "outputs": {}}
 
-    def _build_ui(self) -> None:
-        tabs = QTabWidget()
-        tabs.addTab(self._build_io_tab(), "I/O")
+    def _rebuild_tabs(self) -> None:
+        self.input_name_labels = {}
+        self.output_name_labels = {}
+        self.output_control_name_labels = {}
+        self.input_state_labels = {}
+        self.output_state_labels = {}
+
+        while self.tabs.count() > 0:
+            self.tabs.removeTab(0)
+
+        self.tabs.addTab(self._build_io_tab(), "I/O")
+
+        automation_api = self.api_base_url or "http://127.0.0.1:8000"
         self.automation_tab = AutomationTab(
-            self.api_base_url,
+            automation_api,
             input_count=self.input_count,
             output_count=self.output_count,
             io_names=self.io_names,
         )
-        tabs.addTab(self.automation_tab, "AUTOMAÇÃO")
-        self.setCentralWidget(tabs)
+        self.tabs.addTab(self.automation_tab, "AUTOMACAO")
 
     def _build_io_tab(self) -> QWidget:
         root = QWidget()
@@ -285,15 +528,16 @@ class MainWindow(QMainWindow):
         health_layout.addStretch()
 
         device_layout = QHBoxLayout()
+        model = self.device_info.get("model", "MIO")
+        firmware = self.device_info.get("firmware", "unknown")
+        name = self.current_device_name or "Nenhum"
         self.device_label = QLabel(
-            "Controladora: "
-            f"{self.device_info.get('model', 'MIO')}  |  "
-            f"Entradas: {self.input_count}  |  "
-            f"Saidas: {self.output_count}  |  "
-            f"Firmware: {self.device_info.get('firmware', 'unknown')}"
+            f"Ativo: {name}  |  Controladora: {model}  |  Entradas: {self.input_count}  |  "
+            f"Saidas: {self.output_count}  |  Firmware: {firmware}"
         )
         self.device_label.setStyleSheet("font-weight: 600;")
         device_layout.addWidget(self.device_label)
+
         edit_names_btn = QPushButton("Personalizar nomes de I/O")
         edit_names_btn.clicked.connect(self._open_io_names_dialog)
         device_layout.addWidget(edit_names_btn)
@@ -332,14 +576,8 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(control_scroll)
         return root
 
-    def _setup_timer(self) -> None:
-        self.timer = QTimer(self)
-        self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.refresh_data)
-        self.timer.start()
-
     def refresh_data(self) -> None:
-        if self._is_refreshing:
+        if self._is_refreshing or not self.connected or not self.api_base_url:
             return
 
         self._is_refreshing = True
@@ -357,6 +595,10 @@ class MainWindow(QMainWindow):
             self._is_refreshing = False
 
     def send_output_command(self, component_addr: int, action: int) -> None:
+        if not self.connected:
+            QMessageBox.warning(self, "Desconectado", "Conecte em um dispositivo antes de enviar comandos.")
+            return
+
         payload = {
             "component_addr": component_addr,
             "action": action,
@@ -383,6 +625,8 @@ class MainWindow(QMainWindow):
         online = bool(health_data.get("online", False))
         self.health_indicator.setText("ONLINE" if online else "OFFLINE")
         self._set_indicator_color(self.health_indicator, "#2e7d32" if online else "#c62828")
+        if self.connected:
+            self._set_connection_status("Conectado" if online else "Desconectado")
 
     def _build_states_panel(
         self,
@@ -451,6 +695,10 @@ class MainWindow(QMainWindow):
         return holder
 
     def _open_io_names_dialog(self) -> None:
+        if not self.connected:
+            QMessageBox.information(self, "Desconectado", "Conecte em um dispositivo para editar nomes I/O.")
+            return
+
         dialog = IONamesDialog(
             self,
             input_count=self.input_count,
@@ -486,9 +734,22 @@ class MainWindow(QMainWindow):
         names = self.io_names.get(kind, {})
         custom = str(names.get(str(channel), "")).strip()
         prefix = "Entrada" if kind == "inputs" else "Saida"
+        fixed = f"{prefix} {channel:02d}"
         if custom:
-            return f"{channel:02d} - {custom}"
-        return f"{prefix} {channel:02d}"
+            return f"{fixed} | {custom}"
+        return fixed
+
+    def _api_base_for_device(self, device: Dict[str, Any]) -> str:
+        server_ip = str(device.get("server_ip", "127.0.0.1")).strip() or "127.0.0.1"
+        api_port = self._safe_int(device.get("api_port"), DEFAULT_API_PORT)
+        return f"http://{server_ip}:{api_port}"
+
+    def _set_connection_status(self, status: str) -> None:
+        self.connection_status_label.setText(f"Status: {status}")
+
+    def _log(self, message: str) -> None:
+        self.log_label.setText(message)
+        print(f"[GUI] {message}")
 
     @staticmethod
     def _to_bool(value: Any) -> bool:
@@ -521,57 +782,41 @@ class MainWindow(QMainWindow):
             return default
 
 
-def _parse_api_url(api_url: str) -> tuple[str, int]:
-    value = api_url.strip()
-    if value.startswith("http://"):
-        value = value[7:]
-    if value.startswith("https://"):
-        value = value[8:]
-
-    if ":" in value:
-        host, port_text = value.rsplit(":", 1)
-        try:
-            return host.strip(), int(port_text.strip())
-        except ValueError:
-            return value.strip(), 8000
-    return value.strip(), 8000
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Painel PyQt6 para API FastAPI MIO400")
-    parser.add_argument("--ip", default="127.0.0.1", help="IP/host padrao da API")
-    parser.add_argument("--port", type=int, default=8000, help="Porta padrao da API")
-    parser.add_argument("--device-ip", default="192.168.1.100", help="IP padrao da MIO")
-    parser.add_argument("--device-port", type=int, default=5000, help="Porta padrao da MIO")
-    parser.add_argument(
-        "--api-url",
-        default=None,
-        help="Compatibilidade: URL completa da API para preencher IP/porta iniciais",
-    )
+    parser.add_argument("--ip", default=None, help="IP/host da API para inserir no dispositivo")
+    parser.add_argument("--port", type=int, default=DEFAULT_API_PORT, help="Porta da API")
+    parser.add_argument("--device-ip", default=None, help="IP da MIO para inserir no dispositivo")
+    parser.add_argument("--device-port", type=int, default=5000, help="Porta da MIO")
+    parser.add_argument("--api-url", default=None, help="Compatibilidade: URL completa da API")
     args = parser.parse_args()
+
     config = load_config()
 
-    default_api_ip = str(config.get("api", {}).get("ip", args.ip))
-    default_api_port = int(config.get("api", {}).get("port", args.port))
-    default_device_ip = str(config.get("device", {}).get("ip", args.device_ip))
-    default_device_port = int(config.get("device", {}).get("port", args.device_port))
-
-    cli_overrides = {"--ip", "--port", "--device-ip", "--device-port"}
-    if any(flag in sys.argv[1:] for flag in cli_overrides):
-        default_api_ip = args.ip
-        default_api_port = args.port
-        default_device_ip = args.device_ip
-        default_device_port = args.device_port
     if args.api_url:
-        default_api_ip, default_api_port = _parse_api_url(args.api_url)
+        api_host, api_port = _parse_api_url(args.api_url)
+        cli_device = {
+            "name": "Dispositivo CLI",
+            "server_ip": api_host,
+            "device_ip": args.device_ip or "192.168.1.100",
+            "port": args.device_port,
+            "api_port": api_port,
+        }
+        config = upsert_device(config, cli_device, make_last=True)
+        save_config(config)
+    elif args.ip or args.device_ip:
+        cli_device = {
+            "name": "Dispositivo CLI",
+            "server_ip": args.ip or "127.0.0.1",
+            "device_ip": args.device_ip or "192.168.1.100",
+            "port": args.device_port,
+            "api_port": args.port,
+        }
+        config = upsert_device(config, cli_device, make_last=True)
+        save_config(config)
 
     app = QApplication(sys.argv)
-    window = ConnectionWindow(
-        default_api_ip=default_api_ip,
-        default_api_port=default_api_port,
-        default_device_ip=default_device_ip,
-        default_device_port=default_device_port,
-    )
+    window = MainWindow(config=config)
     window.show()
     sys.exit(app.exec())
 

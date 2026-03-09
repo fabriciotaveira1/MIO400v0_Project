@@ -1,3 +1,60 @@
 {
-  "rules": []
+  "rules": [
+    {
+      "id": 1,
+      "name": "Regra sem nome",
+      "trigger": {
+        "type": "INPUT_ON",
+        "input": 1
+      },
+      "conditions": [],
+      "actions": [
+        {
+          "type": "OUTPUT_ON",
+          "output": 1
+        },
+        {
+          "type": "OUTPUT_ON",
+          "output": 2
+        },
+        {
+          "type": "OUTPUT_ON",
+          "output": 3
+        },
+        {
+          "type": "OUTPUT_ON",
+          "output": 4
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "Regra sem nome",
+      "trigger": {
+        "type": "INPUT_OFF",
+        "input": 1
+      },
+      "conditions": [],
+      "actions": [
+        {
+          "type": "OUTPUT_OFF",
+          "output": 1
+        },
+        {
+          "type": "OUTPUT_OFF",
+          "output": 2
+        },
+        {
+          "type": "OUTPUT_OFF",
+          "output": 3
+        },
+        {
+          "type": "OUTPUT_OFF",
+          "output": 4
+        }
+      ],
+      "enabled": true
+    }
+  ]
 }

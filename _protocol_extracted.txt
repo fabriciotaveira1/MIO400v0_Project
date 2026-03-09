@@ -1,0 +1,1217 @@
+
+
+===== PAGE 1 =====
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Protocolo de Aplicação  
+ 
+ 
+
+===== PAGE 2 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 2/27  
+ 
+Sumário 
+1 - Definições e considerações gerais.............................................................................................. 4 
+ 
+2 - Protocolo de Comunicação ......................................................................................................... 5 
+2.1  Composição do frame: ....................................................................................................... 5 
+2.2  ACK/NACK: ........................................................................................................................ 6 
+ 
+3 - Opcodes...................................................................................................................................... 7 
+3.1  Opcode 01 - Atuação nas saídas ....................................................................................... 7 
+3.2  Opcode 02 - Leitura do estado das saídas........... .............................................................. 8 
+3.3  Opcode 03 - Leitura do estado das entradas digitais e saídas.......................................... . 8 
+3.4  Opcode 04 - Configuração das entradas digitais................................................................ 9 
+3.5  Opcode 05 - Leitura da configuração das entradas digitais.............................................. 10  
+3.6  Opcode 06 - Leitura do estado das entradas digitais ....................................................... 11  
+3.7  Opcode 11 - Configuração de habilitação das entradas digitais....................................... 11 
+3.8  Opcode 12 - Leitura da configuração de habilitação das entradas digitais....................... 11  
+3.9  Opcode 13 - Configuração dos hosts da aplicação .......................................................... 12  
+3.10  Opcode 14 - Leitura da configuração dos hosts da aplicação .......................................... 13 
+3.11  Opcode 15 - Configuração das saídas ............................................................................. 13  
+3.12  Opcode 16 - Leitura da configuração das saídas ............................................................. 14  
+3.13  Opcode 24 - Configuração IP ........................................................................................... 14  
+3.14  Opcode 25 - Leitura da configuração IP ........................................................................... 14  
+3.15  Opcode 26 - Habilitar/desabilitar os hosts da aplicação ................................................... 15  
+3.16  Opcode 27 - Leitura do estado (habilitado/desabilitado) dos hosts da aplicação ............. 15  
+3.17  Opcode 28 - Habilitar/desabilitar as entradas digitais....................................................... 15  
+3.18  Opcode 29 - Leitura do estado (habilitado/desabilitado) das entradas digitais................. 15  
+3.19  Opcode 30 - Formato de envio dos eventos (entradas, acesso, etc) ............................... 16  
+3.20  Opcode 31 - Leitura de logs ............................................................................................. 17  
+3.21  Opcode 32 - Exclusão de logs.......................................................................................... 18  
+3.22  Opcode 33 - Informações dos logs................................................................................... 19  
+3.23  Opcode 34 - Ajuste do relógio interno (RTC).................................................................... 19  
+3.24  Opcode 35 - Leitura do relógio interno (RTC)................................................................... 19  
+3.25  Opcode 36 - Comando de Reset do dispositivo ............................................................... 20  
+3.26  Opcode 37 - Comando de apagamento das configurações da aplicação ........................ 20  
+3.27  Opcode 42 - Leitura da versão do firmware...................................................................... 20  
+3.28  Opcode 43 - Configuração do evento de acesso.............................................................. 21  
+3.29  Opcode 44 - Leitura da configuração do evento de acesso ............................................. 21 
+3.30 Opcode 50 - Configuração do heartbeat .......................................................................... 21  
+3.31  Opcode 51 - Leitura da configuração do heartbeat .......................................................... 22  
+3.32  Opcode 52 - Formato de envio do heartbeat.......... .......................................................... 22  
+3.33  Opcode 60 - Configuração da rede de dispositivos seriais (RS232/RS485) .................... 22  
+3.34  Opcode 61 - Leitura da configuração da rede de dispositivos seriais (RS232/RS485) .... 23  
+3.35  Opcode 70 - Configuração dos drivers das portas seriais ................................................ 23  
+3.36  Opcode 71 - Leitura da configuração dos drivers das portas seriais................................ 23  
+3.37  Opcode 72 - Configuração dos drivers das portas síncronas........................................... 24  
+3.38  Opcode 73 - Leitura da configuração dos drivers das portas síncronas........................... 24  
+3.39  Opcode 80 - Configuração do nome da empresa............................................................. 24  
+3.40  Opcode 81 - Leitura da configuração do nome da empresa............................................. 24  
+3.41  Opcode 90 - Configuração do  heartbeat via socket TCP ................................................ 25  
+
+===== PAGE 3 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 3/27  
+ 
+3.42  Opcode 91 - Leitura da configuração do  heartbeat via socket TCP ................................ 25  
+3.43  Opcode 92 - Formato de envio do heartbeat via socket TCP........................................... 26  
+3.44  Opcode 900 - Leitura do ID do equipamento através do endereço IP.............................. 27  
+3.45  Opcode 901 - Leitura do endereço IP do equipamento através do ID.............................. 27  
+3.46  Opcode 902 - Descoberta de dispositivos  via broadcast................................................ . 27  
+
+===== PAGE 4 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 4/27  
+ 
+1 - Definições e considerações gerais 
+• Ordem de transmissão/composição do frame/variáveis: 
+  - MSB transmitido em primeiro lugar (posição mais  à esquerda do campo/variável) 
+  ex.:  1 0 0 1 0 0 1 1 0 1 0 1 1 0 1 1 
+   MSB (bit 15)           LSB (bit 0) 
+ 
+• Valores padrão: 
+  - ON=1, OFF = 0 
+  - Sim(S) = 1, Não(N) = 0 
+  - Bin_data (binário): dados são acessados a nível  de bitfield 
+  ex.: 1  0  0  1  0  0  1  1  0  1  0  1  1  0  1  1 
+   bit .15          bit .10                         bit .0 
+ 
+• Tamanho dos campos/variáveis: 
+  - Byte/char = 1 byte (8 bits) 
+  - Int = 2 bytes (16 bits) 
+  - Long = 4 bytes (32 bits) 
+  - Str = string, incluindo o terminador 0x00 (valo r zero em hexadecimal) 
+ 
+• Conotação de bases numéricas: 
+  - 0x = base hexadecimal 
+  - não especificado = base decimal 
+ 
+• Endereços: 
+  - Valores entre 1 e n, salvo especificação em contrário. 
+ 
+• Portas do hardware (tabela HW_Ports): 
+Valor Porta 
+0 NA 
+1 Ethernet 
+2 Com_1 
+3 Com_2 
+4 Com_3 
+ 
+• Formato do campo RTC (tabela RTC_Format): 
+Campo 
+ Descrição Tamanho  
+0 Dia byte 
+1 Mês byte 
+2 Ano byte 
+3 Dia_semana  byte 
+4 Hora byte 
+5 Minuto byte 
+6 Segundo byte 
+       
+Obs.: Dia_semana: 1 = Domingo, ..., 7 = Sábado 
+ 
+
+===== PAGE 5 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 5/27  
+ 
+2  - Protocolo de Comunicação 
+2.1 Composição do frame: 
+O frame é dividido em duas partes: Header e dados da aplicação 
+Header do Frame / Dados da Aplicação  
+Campo Tamanho (bytes) Descrição Exemplo 
+1 Long (4)  Header Symbol  0xAA55AA55 
+2 Long (4)  Protocol Version 0x00000001 
+3 Long (4)  Data Size 0x00000006 
+4 Long (4)  Source Id  0x0234098E 
+5 Long (4)  Destiny Id  0x04352AF5 
+6 Long (4)  Frame Sequence  0x00000005 
+7 Long (4)  Checksum  0xFF4901EB 
+8 Long (4) Opcode  0x0000002A 
+9 data array  
+(campo de dados)  
+Application Data  ... 
+ 
+● Header Symbol: Constante identificadora de inicio de frame 0xAA55AA55. 
+● Protocol Version: Identifica a versão do protocolo. 
+● Data Size: Especifica o tamanho em bytes do campo "Application  Data".  
+● Source Id: Identifica o Id do equipamento que está transmitindo o frame.  
+● Destiny Id: Identifica o Id do equipamento que irá receber o frame. 
+● Frame Sequence: Identifica o número seqüencial do frame. 
+● Checksum: Contempla a soma de TODOS os bytes do frame, com ex ceção do próprio 
+campo checksum. 
+● Opcode: Identifica qual procedimento/comando será executado com os dados fornecidos. 
+● Application Data: Contém os dados relacionados ao Opcode. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 6 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 6/27  
+ 
+2.2 ACK/NACK: 
+A grande maioria dos opcodes exige o retorno de ack/nack  para encerramento do processo. 
+A codificação para ack/nack  ocorre da seguinte forma: 
+ 
+ ٠ACK: Opcode + 0x80000000 (opcode com bit 31 setado) 
+ 
+ ٠NACK: Opcode + 0x40000000 (opcode com bit 30 setado)  
+     O NACK informa, via campo de dados, as seguintes informações: 
+1- Código do Erro (Error Code): Long 
+2- Dados do Erro (Error Data): Long 
+
+===== PAGE 7 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 7/27  
+ 
+3  - Opcodes 
+As informações abaixo se referem aos dados a serem inseridos dentro do campo "Dados da 
+Aplicação" (Application Data), de acordo com os respectivos opcodes. 
+ 
+3.1 Opcode 01 - Atuação nas saídas 
+Requisição: 
+Campo  Tamanho 
+(bytes) Descrição Exemplo  Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) OFF/ON/TOGGLE ON Especifica o tipo de atuação 
+0=off,1=on,2=toggle 
+3 Long (4) Tempo_total 3000 Especifica o tempo total da atuação na saída.  
+Unidade de tempo = 10ms (0,01s) 
+4 Long (4) Tempo_semiciclo1 100 Especifica o "T_ON" da atuação na saída. 
+Unidade de tempo = 10ms (0,01s) 
+5 Long (4) Tempo_semiciclo2 200 Especifica o "T_OFF" da atuação na saída. 
+Unidade de tempo = 10ms (0,01s) 
+6 Byte (1) Memoriza em flash S/N Memoriza a atuação em memória não volátil 
+ 
+• Temporização:  
+Quando temporizado, os campos 4 e 5 podem ser usado s para gerar pulsos 
+Isto ocorre quando a soma destes campos é menor que o tempo total. 
+Isto permite, por exemplo, que um relé ligue por 1 segundo e desligue por 2 segundos durante 
+um determinado período de tempo, definido por "Temp o_total" (conforme exemplo acima). 
+Ao expirar o tempo total, o relé permanece no estado atual. 
+ 
+• Memorização da atuação: 
+ 
+Geralmente utilizado para atuação não temporizadas (one shot), este recurso permite que após 
+a queda de energia, o relé volte a condição estipulada no frame, uma vez que esta condição 
+fora armazenada em memória não volátil (flash). 
+ 
+     ATENÇÃO:  
+ 
+ ٠Em função das características da memória flash, esta operação não pode ser executada mais 
+de 100 mil vezes. 
+ ٠Esta operação demanda maior tempo de execução, no c aso 6ms (0,006s) ao invés de 300us 
+(0,0003s). 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+
+===== PAGE 8 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 8/27  
+ 
+3.2 Opcode 02 - Leitura do estado das saídas 
+ 
+Requisição 
+: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta:  
+Campo  Tamanho(bytes)  Descrição  Exemplo Observação 
+1 Long (4) Output_data  
+0x0000000F 
+saídas 1 a 4 ligadas, 
+5 a 32 desligadas  
+Reflete o estado das saídas.    
+bit .0 = saída 1, bit .31 = saída 32 
+ 
+ 
+ 
+3.3 Opcode 03 - Leitura do estado das entradas digi tais e saídas 
+Requisição : 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta:  
+Campo  Tamanho(bytes)  Descrição  Exemplo Observação 
+1 Long (4) Input 
+0x0000000F 
+entradas 1 a 4 atuadas,  
+5 a 32 não atuadas  
+Reflete todas as entradas.    
+Bit .0 = entrada 1,  
+bit .31 = entrada 32 
+ 
+2 Long (4) Output 
+0x0000000F 
+saídas 1 a 4 ligadas, 
+5 a 32 desligadas  
+Reflete todas as saídas.    
+Bit .0 = saída 1,  
+bit .31 = saída 32 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 9 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 9/27  
+ 
+3.4 Opcode 04 - Configuração das entradas digitais 
+ 
+Requisição: 
+Campo  Tamanho 
+(bytes) 
+Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Endereço da Entrada Digital 
+2 Byte (1) Enabled 0x01(Habilitado) Habilitação do input. 
+0 = desabilitado, 1 = habilitado 
+3 Byte (1) Activation level 1 (+V) 
+Define se input atua com sinal positivo ou 
+terra (gnd) 
+0 = atuação com GND 
+1 = atuação com sinal positivo (+V) 
+4 Long (4) On state delay 20 (Delay=0,2s) Especifica delay para atuação do input. 
+Unidade de tempo = 10ms (0,01s) 
+5 Long (4) Off state delay 10 (Delay=0,1s) Especifica delay para desatuação do input. 
+Unidade de tempo = 10ms (0,01s) 
+6 Int (2) Host report 
+mode 
+0x00000001 (enabled) 
+0x00000000 (disabled)  
+Máscara binária referente a opções para 
+report junto a hosts. 
+bit 0 = report habilitado, 
+bit 1 = report ao atuar, 
+bit 2 = report ao desatuar 
+7 Long (4) Host report list 
+mask 
+0x80000003 
+(habilitados: 32, 2 e 1) 
+Máscara binária referente à habilitação dos 
+hosts cadastrados na aplicação Commbox. 
+0 = host_1 (…)   31=host_32 
+8 Int (2) Log mode mask  0x00 (Não executa log)  
+Máscara binária referente aos 
+procedimentos de log de eventos. 
+bit 0 = log habilitado, bit 1= log sempre 
+bit 2= log somente se offline, 
+bit 3 = log ao atuar, bit 4 = log ao desatuar 
+9 Byte (1) Information type  1 (sinalização) 
+ 
+Tipo de informação gerada pelo input: 
+1= sinalização 2= alarme 
+10 String (24)  Name entrada_sensor_01 Nome do input na aplicação 
+ 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 10 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 10/27  
+ 
+3.5 Opcode 05 - Leitura da configuração das entrada s digitais  
+Requisição: 
+Campo  Tamanho(bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 0x00000001  Endereço da Entrada Digital 
+ 
+Resposta: 
+Campo 
+ Tamanho 
+(bytes) 
+Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) Enabled  0x01(Habilitado) Habilitação do host. 
+0 = desabilitado, 1 = habilitado 
+3 Byte (1) Activation level 1 (+V) 
+Define se input atua com sinal positivo ou 
+terra (gnd) 
+0 = atuação com gnd 
+1 = atuação com sinal positivo (+V) 
+4 Long (4) On state delay 20 (Delay=0,2s) Especifica delay para atuação do input. 
+Unidade de tempo = 10ms (0,01s) 
+5 Long (4) Off state delay 10 (Delay=0,1s) Especifica delay para desatuação do input. 
+Unidade de tempo = 10ms (0,01s) 
+6 Int (2) Host report 
+mode 
+0x00000001 (enabled) 
+0x00000000 (disabled)  
+Máscara binária referente a opções para 
+report junto a hosts. 
+bit 0 = report habilitado, 
+bit 1 = report ao atuar, 
+bit 2 = report ao desatuar 
+7 Long (4) Host report list 
+mask 
+0x80000003 
+(habilitados: 32, 2 e 1) 
+Máscara binária referente à habilitação dos 
+hosts cadastrados na aplicação Commbox. 
+0 = host_1 (…)   31=host_32 
+8 Int (2) Log mode mask  0x00 (Não executa log)  
+Máscara binária referente aos 
+procedimentos de log de eventos. 
+bit 0 = log habilitado, bit 1= log sempre 
+bit 2= log somente se offline, 
+bit 3 = log ao atuar, bit 4 = log ao desatuar 
+9 Byte (1) Information type  1 (sinalização) 
+ 
+Tipo de informação gerada pelo input: 
+1= sinalização 2= alarme 
+10 String (24)  Name entrada_sensor_01 Nome do input na aplicação 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 11 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 11/27  
+ 
+3.6 Opcode 06 - Leitura do estado das entradas digi tais 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo  Tamanho 
+(bytes) Descrição Exemplo Observação 
+1 Long (4) Input_data 0x00000005 
+Inputs atuados: 1 e 3  
+Máscara binária referente ao estado dos 
+32 inputs digitais. 
+0 = input 1  (...)  31= input 32 
+ 
+3.7 Opcode 11 - Configuração de habilitação das ent radas digitais 
+Requisição: 
+Campo  Tamanho 
+(bytes) Descrição Exemplo Observação 
+1 Long (4) Enabled 0x01(Habilitado)  Habilitação do host. 
+0 = desabilitado, 1 = habilitado 
+Resposta: 
+ACK / NACK 
+ 
+3.8 Opcode 12 - Leitura da configuração de habilita ção das entradas digitais 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo Tamanho(bytes) Descrição Exemplo Observação 
+1 Long (4) Enabled 0x01(Habilitado)  Habilitação do host. 
+0 = desabilitado, 1 = habilitado 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 12 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 12/27  
+ 
+ 
+ 
+3.9  Opcode 13 - Configuração dos hosts da aplicaçã o 
+Requisição: 
+Campo  Tamanho 
+(bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) Enabled 0x01(Habilitado)  Habilitação do host. 
+0 = desabilitado, 1 = habilitado 
+3 Long (4) ID do Host 0x00000001  
+4 Byte (1) IP Protocol 17 (UDP) 
+Especifica tipo de protocolo de transporte IP 
+(quando aplicável) a ser utilizado nas conexões 
+geradas pelo equipamento Commbox. 
+17 = UDP, 6 = TCP 
+5 Byte (1) Addressing type 4 (ID) Especifica tipo de endereço atribuído ao host. 
+1= IP, 2= URL, 3= NAME, 4= ID. 
+6 Byte (40) Address 0xC0A80723 
+Valor atribuído à variável endereço. 
+Ex: 0xC0A80723 
+Se IP: 192.168.7.35 
+Se id: 3232237347 
+7 Int (2) Source_Port 4090 Especifica a porta IP disponível do host. 
+8 Byte (1) HW Port 1 (Ethernet) 
+Especifica o tipo de interface física a ser utilizada 
+para conexão com o host. 
+Vide tabela HW_Ports 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 13 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 13/27  
+ 
+ 
+ 
+3.10  Opcode 14 - Leitura da configuração dos hosts da aplicação 
+Requisição: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 0 Especifica o endereço do componente 
+ 
+Resposta: 
+Campo 
+ Tamanho 
+(bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) Enabled 0x01(Habilitado)  Habilitação do host. 
+0 = desabilitado, 1 = habilitado 
+3 Long (4) ID do Host 0x00000001  
+4 Byte (1) IP Protocol 17 (UDP) 
+Especifica tipo de protocolo de transporte IP 
+(quando aplicável) a ser utilizado nas conexões 
+geradas pelo equipamento Commbox. 
+17 = UDP, 6 = TCP 
+5 Byte (1) Addressing type 4 (ID) Especifica tipo de endereço atribuído ao host. 
+1= IP, 2= URL, 3= NAME, 4= ID. 
+6 Byte (40) Address 0xC0A80723 
+Valor atribuído à variável endereço. 
+Ex: 0xC0A80723 
+Se IP: 192.168.7.35 
+Se id: 3232237347 
+7 Int (2) Source_Port 4090 Especifica a porta IP disponível do host. 
+8 Byte (1) HW Port 1 (Ethernet) 
+Especifica o tipo de interface física a ser utilizada 
+para conexão com o host. 
+Vide tabela HW_Ports 
+ 
+ 
+3.11 Opcode 15 - Configuração das saídas 
+Requisição: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 String (24) Name rele_porta_cofre Nome do relé na aplicação 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+
+===== PAGE 14 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 14/27  
+ 
+3.12  Opcode 16 - Leitura da configuração das saídas 
+Requisição: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 0 Especifica o endereço do componente 
+ 
+Resposta: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 String (24) Name rele_porta_cofre Nome do relé na aplicação 
+ 
+3.13   Opcode 24 - Configuração IP 
+Requisição: 
+Campo Tamanho(bytes) Descrição Exemplo Observação 
+1 Byte (1) Dhcp Enable S/N  
+2 Long (4) Source_IP 0xC0A80720 = 192.168.7.32 
+3 Long (4) Subnet Mask 0xFFFFFF00 = 255.255.255.0 
+4 Long (4) Gateway IP 0xC0A80764 = 192.168.7.100 
+5 Int (2) Client_port 4091  
+6 String (32) Client_name porta_cofre Nome do equipamento 
+Resposta: 
+ACK / NACK 
+3.14   Opcode 25 - Leitura da configuração IP 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo Tamanho(bytes) Descrição Exemplo Observação 
+1 Byte (1) Dhcp Enable S/N  
+2 Long (4) Source_IP 0xC0A80720 = 192.168.7.32 
+3 Long (4) Subnet Mask 0xFFFFFF00 = 255.255.255.0 
+4 Long (4) Gateway IP 0xC0A80764 = 192.168.7.100 
+5 Int (2) Client_port 4091  
+6 String (32) Client_name porta_cofre Nome do equipamento 
+7 Int (2) Emac_address_hi 0x0043 Primeiros 2 octetos do MAC 
+8 Long (4) Emac_address_lo 0x4241A5B8 Últimos 4 octetos do MAC 
+ 
+
+===== PAGE 15 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 15/27  
+ 
+3.15  Opcode 26 - Habilitar/desabilitar os hosts da aplicação 
+Requisição: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) Enable 0x01 (Habilitado) Habilitação do host. 
+0 = desabilitado  1 = habilitado 
+ 
+Resposta: 
+ACK / NACK 
+3.16  Opcode 27 - Leitura do estado (habilitado/desabilitado) dos hosts da 
+aplicação 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Hosts_mask  
+0x0000000F 
+hosts 1 a 4 habilitados 
+hosts 5 a 32 desabilitados 
+Reflete o status de todos os hosts. 
+0 = host 1   (…)   31 = host 32 
+ 
+3.17   Opcode 28 - Habilitar/desabilitar as entradas digitais 
+Requisição: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Endereço 1 Especifica o endereço do componente 
+2 Byte (1) Enable 0x01 (Habilitado) Habilitação do input. 
+0 = desabilitado  1 = habilitado 
+ 
+Resposta: 
+ACK / NACK 
+3.18  Opcode 29 - Leitura do estado (habilitado/desabilitado) das entradas 
+digitais 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Enable_mask  
+0x0000000F 
+inputs 1 a 4 habilitados 
+inputs 5 a 32 desabilitados  
+0 = input 1   (…)   31 = input 32 
+
+===== PAGE 16 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 16/27  
+ 
+3.19  Opcode 30 - Formato de envio dos eventos (entradas, acesso, etc)  
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Event Type 0x00000002 
+1 = Ativação Entrada digital 
+2 = Desativação Entrada digital 
+3 = Acesso 
+4 = Ponto 
+5 = Keyboard  
+Shortcut  
+2 Byte (1) Dia  RTC 
+3 Byte (1) Mês  RTC 
+4 Byte (1) Ano  RTC 
+  5 Byte (1)  Dia da Semana   RTC 
+6 Byte (1)  Hora  RTC 
+7 Byte (1) Minuto  RTC 
+8 Byte (1) Segundo  RTC 
+9 Long (4) Time stamp  Base de tempo cpu  x 10ms (0,01s) 
+10 Byte (1) Link status  0=Off  e 1= On 
+11 Byte [36] Dados do Evento  Vide tabelas abaixo 
+ 
+Dados do Evento: 
+ 
+- Se Event Type = 1 ou 2, evento de atuação em entrada digital 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Endereço  0x12 Atuação na Entrada 18 
+2 Long (4) Inputs_Status 0x00000800 Entrada 18 atuada 
+3 Long (4) Output_Status 0x00000000 Nenhuma saída ligada 
+ 
+- Se Event Type = 3 ou 4, evento de acesso ou ponto respectivamente 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) access_validation  Validação do evento de acesso 
+2 Long (4) user_id   
+3 Byte (1) in_out_status  
+Sentido 
+1 = Entrada 
+0 = Saída 
+4 Int (2) funcoes_acesso   
+5 Byte (1) reader_driver_id   
+6 Byte[21] Identificador  
+Cartões de código de barras e 
+teclado são em ASC. 
+Cartões wiegand 26 são 4 primeiros 
+bytes para o Facility e os proximos 4 
+bytes para o Card Number. 
+8 Byte (1) match_quality   
+9 Byte (1) n_reader   
+ 
+
+===== PAGE 17 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 17/27  
+ 
+ 
+ 
+- Se Event Type = 5, Evento de Shortcut via Teclado 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Autorização Shortcut 0x01 0 = Não Autorizado 
+1 = Autorizado 
+2 Long (4) ID do Shortcut 0x00000008 Shortcut 8 
+3 Long (4) user_id 0x0000000F  
+4 Byte (1) reader_driver_id 0x02 Wiegand 26 
+5 Byte[21] Identificador  
+Cartões de código de barras e 
+teclado são em ASC. 
+Cartões wiegand 26 são 4 primeiros 
+bytes para o Facility e os proximos 4 
+bytes para o Card Number. 
+ 
+Obs : Os dados que não completarem os 36 bytes dos dados do evento ou a quantidade do campo, 
+são completados com zeros até os 36 bytes. 
+ 
+Exemplo de dados do tipo de evento 4 = Ponto: 
+(em hexadecimal) 
+04 00000056 00 0000 02 000000AF 00003E66 00000000000000000000000000 00 00 00000000  
+ 
+04  = Tipo de validação de acesso = Válido Cartão 
+00000056 = user_id = 86 
+00  = Sentido = Saída 
+0000  = funcoes_acesso 
+02  = Driver Identificador = Wiegand 26 
+000000AF  = Facility = 175 
+00003E66  = Card Number = 15974 
+00000000000000000000000000  = 13 bytes para completar 21 bytes do campo do Identificador 
+00  = match_quality 
+00  = n_reader 
+00000000  = 4 bytes para completar os 36 do total de bytes dos dados do evento 
+ 
+Resposta: 
+ACK / NACK 
+ 
+3.20  Opcode 31 - Leitura de logs 
+Requisição: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Indice   
+2 Long (4) Quantidade eventos  (máximo 10 eventos por requisição) 
+ 
+ 
+ 
+
+===== PAGE 18 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 18/27  
+ 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Indice   
+2 Long (4) Quantidade eventos  (máximo 10 eventos por requisição) 
+Log 1:  
+3 Long (4) Event type  1 = Ativação Entrada digital 
+2 = Desativação Entrada digital 
+4 Byte (1) Dia   
+  5 Byte (1)  Mes    
+6 Byte (1)  Ano   
+7 Byte (1) Semana   
+8 Byte (1) Hora   
+9 Byte (1) Minuto   
+10 Byte (1) Segundo   
+11 Long (4) Time stamp  Base de tempo cpu  x 10ms (0,01s) 
+12 Byte (1) Ethernet link status   
+13 Byte [36] Dados de evento   
+… … … ... ... 
+Log 10:  
+118 Long (4) Event type  1 = Ativação Entrada digital 
+2 = Desativação Entrada digital 
+119 Byte (1) Dia   
+120 Byte (1) Mes   
+121 Byte (1) Ano   
+122 Byte (1) Semana   
+123 Byte (1) Hora   
+124 Byte (1) Minuto   
+125 Byte (1) Segundo   
+126 Long (4) Time stamp  Base de tempo cpu  x 10ms (0,01s) 
+127 Byte (1) Ethernet link status   
+128 Byte [36] Dados de evento   
+ 
+ 
+ 
+3.21  Opcode 32 - Exclusão de logs 
+Requisição: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Last_index 1 … n Exclui todos os logs 
+
+===== PAGE 19 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 19/27  
+ 
+ 
+Resposta: 
+ACK / NACK 
+ 
+3.22  Opcode 33 - Informações dos logs 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Quantidade Eventos    
+ 
+ 
+3.23  Opcode 34 - Ajuste do relógio interno (RTC) 
+Requisição: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Dia  RTC 
+2 Byte (1) Mes  RTC 
+3 Byte (1) Ano  RTC 
+4 Byte (1) Dia da Semana  RTC 
+5 Byte (1) Hora  RTC 
+6 Byte (1) Minuto  RTC 
+7 Byte (1) Segundo  RTC 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+ 
+ 
+3.24  Opcode 35 - Leitura do relógio interno (RTC) 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+ 
+ 
+
+===== PAGE 20 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 20/27  
+ 
+Reposta: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Dia  RTC 
+2 Byte (1) Mes  RTC 
+3 Byte (1) Ano  RTC 
+4 Byte (1) Dia da Semana  RTC 
+5 Byte (1) Hora  RTC 
+6 Byte (1) Minuto  RTC 
+7 Byte (1) Segundo  RTC 
+ 
+3.25  Opcode 36 - Comando de Reset do dispositivo 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+ACK / NACK 
+ 
+3.26  Opcode 37 - Comando de apagamento das configurações da aplicação 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+ACK / NACK 
+ 
+ 
+ 
+ 
+3.27  Opcode 42 - Leitura da versão do firmware 
+ 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+ 
+ 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Fw Version 115 = firmware versão 1.15 
+
+===== PAGE 21 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 21/27  
+ 
+3.28  Opcode 43 - Configuração do evento de acesso 
+Requisição: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Int (2) Host Report mode 0x00000001  bit .0 = enable 
+2 Long (4) Host Report List mask 0x00000080  máscara binária, 32 hosts 
+3 Int (2) Log mode 0x00000005  
+bit .0 = enable 
+bit .1 = always 
+bit .2 = link_fail 
+ 
+Reposta: 
+ACK / NACK  
+ 
+3.29  Opcode 44 - Leitura da configuração do evento de acesso 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Int (2) Host Report mode 0x00000001 bit .0 = enable 
+2 Long (4) Host Report List mask  0x00000080 máscara binária, 32 hosts 
+3 Int (2) Log mode 0x00000005 
+bit .0 = enable 
+bit .1 = always 
+bit .2 = link_fail 
+ 
+3.30  Opcode 50 - Configuração do heartbeat 
+Requisição: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Enable  Habilitação do input. 
+0 = desabilitado  1 = habilitado 
+2 Long (4) Host list mask   
+3 Long (4) Host list ack 
+enabled mask   
+4 Long (4) Interval timeout   
+ 
+Reposta: 
+ACK / NACK 
+ 
+ 
+ 
+
+===== PAGE 22 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 22/27  
+ 
+3.31  Opcode 51 - Leitura da configuração do heartbeat 
+Requisição: 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+Resposta: 
+Campo Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Enable  Habilitação do input. 
+0 = desabilitado  1 = habilitado 
+2 Long (4) Host list mask   
+3 Long (4) Host list ack enabled mask    
+4 Long (4) Interval timeout   
+ 
+3.32  Opcode 52 - Formato de envio do heartbeat 
+ 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Byte (1) Dia  RTC 
+2 Byte (1) Mes  RTC 
+3 Byte (1) Ano  RTC 
+4 Byte (1) Semana  RTC 
+5 Byte (1) Hora  RTC 
+6 Byte (1) Minuto  RTC 
+7 Byte (1) Segundo  RTC 
+ 
+3.33  Opcode 60 - Configuração da rede de dispositivos seriais (RS232/RS485) 
+Requisição: (30 devices) 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Device Id  Especifica Id do device 
+2 Byte (1) com_port com_3 com_1, com_2 ou com_3 
+Vide tabela HW_Ports 
+... ... ... ... ... 
+59 Long (4) Device Id  Especifica Id do device 
+60 Byte (1) com_port com_3 com_1, com_2 ou com_3 
+Vide tabela HW_Ports 
+ 
+Resposta: 
+ACK / NACK   
+ 
+ 
+ 
+
+===== PAGE 23 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 23/27  
+ 
+3.34  Opcode 61 - Leitura da configuração da rede de dispositivos seriais 
+(RS232/RS485) 
+Requisição: (30 devices) 
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Device Id  Especifica Id do device 
+2 Byte (1) com_port com_3 com_1, com_2 ou com_3 
+Vide tabela HW_Ports 
+... ... ... ... ... 
+1 Long (4) Device Id  Especifica Id do device 
+2 Byte (1) com_port com_3 com_1, com_2 ou com_3 
+Vide tabela HW_Ports 
+ 
+3.35  Opcode 70 - Configuração dos drivers das portas seriais 
+Requisição:  
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Byte (1) Driver_id  driver da com_1 
+2 Byte (1) Driver_id  driver da com_2 
+3 Byte (1) Driver_id  driver da com_3 
+4 Byte (1) Driver_id  driver da com_4 
+Resposta: 
+ACK / NACK   
+ 
+3.36  Opcode 71 - Leitura da configuração dos drivers das portas seriais  
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 Byte (1) Driver_id  driver da com_1 
+2 Byte (1) Driver_id  driver da com_2 
+3 Byte (1) Driver_id  driver da com_3 
+4 Byte (1) Driver_id  driver da com_4 
+ 
+
+===== PAGE 24 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 24/27  
+ 
+3.37  Opcode 72 - Configuração dos drivers das portas síncronas 
+Requisição:  
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Byte (1) Driver_id  driver da sinc_1 
+2 Byte (1) Driver_id  driver da sinc_2 
+3 Byte (1) Driver_id  driver da sinc_3 
+4 Byte (1) Driver_id  driver da sinc_4 
+ 
+Resposta: 
+ACK / NACK   
+ 
+3.38  Opcode 73 - Leitura da configuração dos drivers das portas síncronas 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Byte (1) Driver_id  driver da sinc_1 
+2 Byte (1) Driver_id  driver da sinc_2 
+3 Byte (1) Driver_id  driver da sinc_3 
+4 Byte (1) Driver_id  driver da sinc_4 
+ 
+3.39  Opcode 80 - Configuração do nome da empresa  
+Requisição:  
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 String (64) Company_name  Commbox Tecnologia  Deve ter no Maximo 64 caracteres. 
+Resposta: 
+ACK / NACK   
+ 
+3.40  Opcode 81 - Leitura da configuração do nome da empresa 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 String (64) Company_name  Commbox Tecnologia  Deve ter no Maximo 64 caracteres. 
+ 
+
+===== PAGE 25 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 25/27  
+ 
+3.41  Opcode 90 - Configuração do  heartbeat via socket TCP 
+Requisição:  
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Heartbeat _data_code    
+2 Long (4) Interval_timeout   
+ 
+Resposta: 
+ACK / NACK   
+ 
+3.42  Opcode 91 - Leitura da configuração do  heartbeat via socket TCP 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Heartbeat _data_code   
+Code_01= RTC 
+Code_02 = digital_inputs 
+Code_03 = relays 
+Code_04 = digital_inputs + relays 
+2 Long (4) Interval_timeout   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 26 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 26/27  
+ 
+3.43  Opcode 92 - Formato de envio do heartbeat via socket TCP 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo 
+ Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Heartbeat _Data_Code  
+01 = RTC 
+02 = digital_inputs 
+03 = outputs 
+04 = digital_inputs + relays 
+Se Heartbeat _Data_Code = 01 
+2 Byte (1) Dia  RTC 
+3 Byte (1) Mes  RTC 
+4 Byte (1) Ano  RTC 
+5 Byte (1) Semana  RTC 
+6 Byte (1) Hora  RTC 
+7 Byte (1) Minuto  RTC 
+8 Byte (1) Segundo  RTC 
+Se Heartbeat _Data_Code = 02 
+2 Long (4) Digital_inputs 0x00000005 
+Inputs atuados: 1 e 3 
+Máscara binária referente ao 
+estado das 32 entradas digitais.  
+0 = input 1  (...)  31= input 32 
+Se Heartbeat _Data_Code = 03 
+2 Long (4) Outputs 
+0x0000000F 
+saídas 1 a 4 ligadas, 
+5 a 32 desligadas 
+Reflete o estado das saídas.    
+bit .0 = saída 1,  
+bit .31 = saída 32 
+Se Heartbeat _Data_Code = 04 
+2 Long (4) Digital_inputs 0x00000005 
+Inputs atuados: 1 e 3 
+Máscara binária referente ao 
+estado das entradas digitais. 
+0 = input 1  (...)  31= input 32 
+3 Long (4) Outputs 
+0x0000000F 
+saídas 1 a 4 ligadas, 
+5 a 32 desligadas 
+Reflete o estado das saídas.    
+bit .0 = saída 1,  
+bit .31 = saída 32 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 27 =====
+ 
+Commbox Tecnologia Ltda.  Protocolo de Aplicação 
+Revisão do Manual: 2.0 28/11/2008 27/27  
+ 
+3.44  Opcode 900 - Leitura do ID do equipamento através do endereço IP  
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+Aplicável somente via UDP/broadcast. 
+ 
+Resposta: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Device Id 0x073A2BC8 Especifica o ID do device possuidor do IP 
+especificado na requisição. 
+ 
+3.45  Opcode 901 - Leitura do endereço IP do equipamento através do ID 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+Aplicável somente via UDP/broadcast. 
+ 
+Resposta: 
+Campo  Tamanho (bytes)  Descrição Exemplo Observação 
+1 Long (4) Device Ip  0xC0A80764  
+(192.168.7.100)  
+Especifica o IP do device possuidor do ID 
+especificado na requisição. 
+2 Int (2)  Client_port 4091  
+ 
+3.46  Opcode 902 - Descoberta de dispositivos  via broadcast 
+Requisição:  
+Esta requisição não utiliza o campo de dados, apenas o header. 
+ 
+Resposta: 
+Campo  Tamanho (bytes) Descrição Exemplo Observação 
+1 Long (4) Id   
+2 Long (4) IP   
+3 Int (2) Porta   
+4 Byte (1) Device   
+ 
+ 
+ 
+ 
